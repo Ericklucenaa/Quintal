@@ -39,12 +39,20 @@ const KEYMAP = {
 };
 const EMOTE_KEYS = { Digit1: 'wave', Digit2: 'dance', Digit3: 'cheer' };
 
+// Verificado uma única vez e com o contexto de teste liberado na hora: o navegador
+// aceita poucos contextos WebGL ativos (16 no Chromium) e, passando disso, derruba
+// o mais antigo, que era o da própria sala (a tela piscava azul).
+let webgl2Support = null;
 export function hasWebGL2() {
+  if (webgl2Support !== null) return webgl2Support;
   try {
-    return Boolean(document.createElement('canvas').getContext('webgl2'));
+    const gl = document.createElement('canvas').getContext('webgl2');
+    webgl2Support = Boolean(gl);
+    gl?.getExtension('WEBGL_lose_context')?.loseContext();
   } catch {
-    return false;
+    webgl2Support = false;
   }
+  return webgl2Support;
 }
 
 function isEditable(el) {
@@ -75,7 +83,7 @@ export default function Room3D({ onExpandScreen }) {
   const labelsRef = useRef(null);
   const [spatialOn, setSpatialOn] = useState(() => localStorage.getItem('concord_room3d_spatial') !== 'false');
   const [hint, setHint] = useState('');
-  const [failed, setFailed] = useState(!hasWebGL2());
+  const [failed, setFailed] = useState(() => !hasWebGL2());
   const [helpOpen, setHelpOpen] = useState(true);
   const [themeId, setThemeId] = useState(() => readTheme(channelId).id);
   const [themeMenu, setThemeMenu] = useState(false);
@@ -172,6 +180,10 @@ export default function Room3D({ onExpandScreen }) {
     const hitLimiter = createRateLimiter(4, 1000);
     let hitsTaken = 0;
     let renderError = null;
+    let resizes = 0;
+    let renderErrors = 0;
+    let contextLosses = 0;
+    window.__room3dMounts = (window.__room3dMounts || 0) + 1;
     const peakY = new Map(); // maior altura recebida de cada pessoa (diagnóstico e testes)
     let shake = 0;
 
@@ -572,6 +584,7 @@ export default function Room3D({ onExpandScreen }) {
     // reconstruída quando ele voltar, em vez de a sala ficar em branco.
     const onContextLost = (e) => {
       e.preventDefault();
+      contextLosses += 1;
       logWarn('room3d webgl', new Error('contexto WebGL perdido'));
     };
     const onContextRestored = () => applyTheme(theme.id);
@@ -585,6 +598,7 @@ export default function Room3D({ onExpandScreen }) {
     const resize = () => {
       const w = mount.clientWidth || 1;
       const h = mount.clientHeight || 1;
+      resizes += 1;
       renderer.setSize(w, h, false);
       camera.aspect = w / h;
       camera.updateProjectionMatrix();
@@ -768,6 +782,7 @@ export default function Room3D({ onExpandScreen }) {
       } catch (err) {
         if (!renderError) logWarn('room3d render', err);
         renderError = String(err?.message || err);
+        renderErrors += 1;
       }
     };
     renderer.setAnimationLoop(frame);
@@ -801,7 +816,12 @@ export default function Room3D({ onExpandScreen }) {
         calls: renderer.info.render.calls,
         triangles: renderer.info.render.triangles,
         sceneChildren: room.scene.children.length,
-        error: renderError
+        error: renderError,
+        renderErrors,
+        resizes,
+        contextLosses,
+        mounts: window.__room3dMounts,
+        size: [renderer.domElement.width, renderer.domElement.height]
       }),
       resetPeakY: () => peakY.clear(),
       theme: () => theme.id,

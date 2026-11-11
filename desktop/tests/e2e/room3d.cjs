@@ -272,6 +272,8 @@ app.whenReady().then(async () => {
     check('clássico: ao sair da sala 3D, B continua ouvindo A', heard.audible >= 1, JSON.stringify(heard));
     const persisted = await api(B).js(`return localStorage.getItem('concord_room3d')`);
     check('preferência: a escolha do modo fica salva', persisted === 'false', persisted);
+    const glA = await api(A).js('return window.__room3d.gl()');
+    check('WebGL: a sala de A nunca perdeu o contexto (sem tela piscando azul)', glA.contextLosses === 0 && glA.renderErrors === 0, JSON.stringify(glA));
 
     // --- Sair da chamada --------------------------------------------------------
     await api(B).js(`document.querySelector('.dock-btn.leave').click(); return true;`);
