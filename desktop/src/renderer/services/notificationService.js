@@ -30,10 +30,10 @@ export function showNativeNotification(title, { body = '', icon = '', onClick = 
   }
 
   try {
-    const notification = new Notification(title || 'Concord', {
+    const notification = new Notification(title || 'Quintal', {
       body,
-      icon: icon || 'https://api.dicebear.com/7.x/bottts/svg?seed=ConcordApp',
-      badge: 'https://api.dicebear.com/7.x/bottts/svg?seed=ConcordApp',
+      icon: icon || 'https://api.dicebear.com/7.x/bottts/svg?seed=QuintalApp',
+      badge: 'https://api.dicebear.com/7.x/bottts/svg?seed=QuintalApp',
       tag: tag || ('concord_' + Date.now()),
       silent: false
     });

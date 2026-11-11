@@ -77,8 +77,8 @@ export function VoiceModeSettings() {
             </button>
             <div className="hint">
               {isElectron
-                ? 'Funciona mesmo com o Concord em segundo plano (ex.: durante um jogo).'
-                : 'No navegador, o atalho só funciona com a aba do Concord em foco. Use o app de desktop para um atalho global.'}
+                ? 'Funciona mesmo com o Quintal em segundo plano (ex.: durante um jogo).'
+                : 'No navegador, o atalho só funciona com a aba do Quintal em foco. Use o app de desktop para um atalho global.'}
             </div>
           </div>
           <div>
@@ -149,14 +149,14 @@ export function AppSettingsPanel() {
           checked={settings.closeToTray}
           onChange={(v) => update({ closeToTray: v })}
           title="Minimizar para a bandeja ao fechar"
-          description="O Concord continua rodando (voz e notificações) ao clicar no X."
+          description="O Quintal continua rodando (voz e notificações) ao clicar no X."
           disabled={!isElectron}
         />
         <Toggle
           checked={settings.launchAtStartup}
           onChange={(v) => update({ launchAtStartup: v })}
           title="Iniciar com o Windows"
-          description="Abre o Concord minimizado quando você liga o computador."
+          description="Abre o Quintal minimizado quando você liga o computador."
           disabled={!isElectron}
         />
         <Toggle

@@ -1,4 +1,6 @@
-# Concord
+# Quintal
+
+> Antes chamado **Concord**. O nome mudou para ter identidade própria; veja "Nomes internos" abaixo.
 
 Aplicativo de comunicação para Windows (e web) com chat de texto em tempo real, mensagens diretas, salas de voz e transmissão de tela.
 
@@ -44,6 +46,19 @@ scripts/           Migração de dados e publicação de versões (credenciais d
 ```
 
 Todos os dados ficam no **Firebase** (Auth + Firestore). Não existe servidor próprio: a sinalização WebRTC também passa pelo Firestore. As permissões são garantidas pelas regras em `firestore.rules`, e o cliente apenas espelha essas regras para decidir o que mostrar.
+
+### Nomes internos (mantidos de propósito)
+
+O app se chama Quintal, mas alguns identificadores continuam com o nome antigo porque mudá-los quebraria dados ou instalações:
+
+| Identificador | Por que fica |
+|---|---|
+| Projeto e domínio do Firebase (`concord-3af70`) | Não podem ser renomeados; todas as contas e mensagens estão lá |
+| Coleções do Firestore e chaves locais (`concord_*`) | Renomear apagaria dados e preferências de todos |
+| `appId` do instalador (`com.concord.app`) | A versão nova atualiza a instalada em vez de criar um segundo app |
+| Pasta de dados do Electron (`%APPDATA%\Concord`) | O app instalado continua usando a pasta existente: ninguém perde o login |
+| Repositório `Ericklucenaa/Concord` | O atualizador das versões já instaladas só aceita downloads desse repositório |
+| Links `concord://` | Continuam funcionando; os novos usam `quintal://` |
 
 ## Desenvolvimento
 
@@ -105,7 +120,7 @@ Dados efêmeros (sinalização de voz/tela, "digitando…", soundboard) são apa
 
 ```bash
 firebase deploy --only firestore          # regras e índices
-cd desktop && npm run dist:win            # gera dist-electron/Concord-Setup-<versão>.exe
+cd desktop && npm run dist:win            # gera dist-electron/Quintal-Setup-<versão>.exe
 cd .. && node scripts/publish-release.mjs "Notas da versão"
 firebase deploy --only hosting
 ```
@@ -114,7 +129,7 @@ firebase deploy --only hosting
 
 ## Apoie o projeto
 
-O Concord é grátis. Se ele for útil para você, qualquer valor ajuda a manter o projeto:
+O Quintal é grátis. Se ele for útil para você, qualquer valor ajuda a manter o projeto:
 
 [![Apoie no Ko-fi](https://ko-fi.com/img/githubbutton_sm.svg)](https://ko-fi.com/ericklucena)
 

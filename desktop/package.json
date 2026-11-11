@@ -2,8 +2,8 @@
   "name": "concord-desktop",
   "version": "1.2.3",
   "type": "module",
-  "author": "Concord Team",
-  "description": "Concord — chat, voz e transmissão de tela",
+  "author": "Equipe Quintal",
+  "description": "Quintal — chat, voz, transmissão de tela e sala 3D",
   "main": "src/main/index.cjs",
   "scripts": {
     "dev": "vite",
@@ -23,7 +23,7 @@
   },
   "build": {
     "appId": "com.concord.app",
-    "productName": "Concord",
+    "productName": "Quintal",
     "directories": {
       "output": "dist-electron",
       "buildResources": "build"
@@ -39,8 +39,9 @@
     ],
     "protocols": [
       {
-        "name": "Concord",
+        "name": "Quintal",
         "schemes": [
+          "quintal",
           "concord"
         ]
       }
@@ -57,11 +58,11 @@
       "allowToChangeInstallationDirectory": true,
       "createDesktopShortcut": true,
       "createStartMenuShortcut": true,
-      "shortcutName": "Concord",
-      "artifactName": "Concord-Setup-${version}.${ext}"
+      "shortcutName": "Quintal",
+      "artifactName": "Quintal-Setup-${version}.${ext}"
     },
     "portable": {
-      "artifactName": "Concord-Portable-${version}.${ext}"
+      "artifactName": "Quintal-Portable-${version}.${ext}"
     },
     "npmRebuild": false
   },

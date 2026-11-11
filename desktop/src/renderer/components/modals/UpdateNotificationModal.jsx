@@ -165,7 +165,7 @@ function UpdateNotifier() {
           </div>
 
           <h3 style={{ fontSize: 18, fontWeight: 800, margin: '0 0 6px 0', color: 'var(--text-primary)' }}>
-            Nova Versão do Concord Disponível!
+            Nova Versão do Quintal Disponível!
           </h3>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, fontSize: 13, color: 'var(--text-secondary)' }}>
             <span style={{ backgroundColor: 'var(--bg-secondary)', padding: '2px 8px', borderRadius: 4, fontFamily: 'var(--font-mono)' }}>
@@ -222,7 +222,7 @@ function UpdateNotifier() {
             </div>
           ) : (
             <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>
-              💡 O Concord baixará e instalará a nova versão automaticamente no seu computador.
+              💡 O Quintal baixará e instalará a nova versão automaticamente no seu computador.
             </div>
           )}
 

@@ -47,6 +47,9 @@ app.whenReady().then(async () => {
   try {
     const tag = Date.now().toString(36).slice(-4);
     const names = { A: `ana${tag}`, B: `bruno${tag}` };
+    await api(A).waitFor(`__e2e.hasText('Cadastre-se')`, 'tela de login');
+    await sleep(800);
+    await shot(A, '00_login');
     const aId = await register(A, names.A);
     const bId = await register(B, names.B);
     for (const w of [A, B]) await api(w).js('return 1');

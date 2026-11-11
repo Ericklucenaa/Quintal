@@ -7,7 +7,7 @@ const LEGACY_THEME_KEY = 'concord_theme';
 
 // `preview`: [app background, panel, accent, text] for the theme picker.
 export const THEMES = [
-  { id: 'dark', name: 'Concord', description: 'Violeta sobre grafite', preview: ['#0b0c12', '#181922', '#7c6cff', '#eef0f6'] },
+  { id: 'dark', name: 'Quintal', description: 'Violeta sobre grafite', preview: ['#0b0c12', '#181922', '#7c6cff', '#eef0f6'] },
   { id: 'midnight', name: 'Midnight OLED', description: 'Preto absoluto', preview: ['#000000', '#0b0b10', '#8b7bff', '#f2f2f7'] },
   { id: 'slate', name: 'Grafite', description: 'Cinza neutro e sóbrio', preview: ['#10131a', '#1d2230', '#8ea2ff', '#e6eaf2'] },
   { id: 'nebula', name: 'Nebulosa', description: 'Roxo cósmico com magenta', preview: ['#0d0717', '#1a1029', '#d946ef', '#f5ecff'] },

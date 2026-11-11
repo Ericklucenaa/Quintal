@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { getGoogleOAuthCredential, resetPasswordWithEmail } from '../services/firebase';
-import { Radio, Lock, Mail, User, ArrowRight, ArrowLeft } from 'lucide-react';
+import { Lock, Mail, User, ArrowRight, ArrowLeft } from 'lucide-react';
+import BrandMark from '../components/BrandMark';
 
 export default function AuthPage() {
   const { login, register, loginGoogle } = useAuth();
@@ -132,8 +133,8 @@ export default function AuthPage() {
     <div className="auth-page">
       <div className="auth-card">
         <div className="auth-brand">
-          <Radio className="auth-logo" />
-          <h1 className="auth-title">CONCORD</h1>
+          <BrandMark className="auth-logo" />
+          <h1 className="auth-title">QUINTAL</h1>
           <p className="auth-subtitle">
             {isRegister 
               ? 'Crie sua conta para conversar e transmitir' 

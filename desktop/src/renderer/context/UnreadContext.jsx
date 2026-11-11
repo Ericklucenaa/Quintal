@@ -228,7 +228,7 @@ export function UnreadProvider({ children }) {
   // Taskbar overlay badge + window title with what needs attention.
   const attentionCount = unreadMentions.length + unreadThreadCount;
   useEffect(() => {
-    document.title = attentionCount > 0 ? `(${attentionCount}) Concord` : 'Concord';
+    document.title = attentionCount > 0 ? `(${attentionCount}) Quintal` : 'Quintal';
     window.electronAPI?.setBadge?.(attentionCount, attentionCount > 0 ? badgeDataUrl(attentionCount) : null);
   }, [attentionCount]);
 

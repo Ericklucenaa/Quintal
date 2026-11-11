@@ -435,7 +435,7 @@ const SOUNDS = [
   } },
 
   // --- Alertas & ambiente --------------------------------------------------
-  { id: 'notification', name: 'Ping Concord', emoji: '🔔', color: '#6366f1', category: 'alerts', play: (v) => {
+  { id: 'notification', name: 'Ping Quintal', emoji: '🔔', color: '#6366f1', category: 'alerts', play: (v) => {
     v.tone({ freq: 587.33, to: 880, d: 0.25, g: 0.25, slide: 0.08 });
   } },
   { id: 'doorbell', name: 'Campainha', emoji: '🚪', color: '#0891b2', category: 'alerts', play: (v) => {

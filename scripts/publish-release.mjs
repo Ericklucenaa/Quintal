@@ -16,13 +16,13 @@ import { setDocument } from './firestore-admin.mjs';
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const desktop = path.join(root, 'desktop');
 const { version } = JSON.parse(readFileSync(path.join(desktop, 'package.json'), 'utf8'));
-const notes = process.argv.slice(2).find((a) => !a.startsWith('--')) || `Concord v${version}`;
+const notes = process.argv.slice(2).find((a) => !a.startsWith('--')) || `Quintal v${version}`;
 const mandatory = process.argv.includes('--mandatory');
 const repo = 'Ericklucenaa/Concord';
 const tag = `v${version}`;
 
-const setupName = `Concord-Setup-${version}.exe`;
-const portableName = `Concord-Portable-${version}.exe`;
+const setupName = `Quintal-Setup-${version}.exe`;
+const portableName = `Quintal-Portable-${version}.exe`;
 const setupPath = path.join(desktop, 'dist-electron', setupName);
 const portablePath = path.join(desktop, 'dist-electron', portableName);
 if (!existsSync(setupPath)) {
@@ -44,13 +44,13 @@ try {
 if (releaseExists) {
   gh('release', 'upload', tag, ...assets, '--clobber', '--repo', repo);
 } else {
-  gh('release', 'create', tag, ...assets, '--repo', repo, '--title', `Concord ${tag}`, '--notes', `${notes}\n\nSHA-256 (${setupName}): \`${sha256}\``);
+  gh('release', 'create', tag, ...assets, '--repo', repo, '--title', `Quintal ${tag}`, '--notes', `${notes}\n\nSHA-256 (${setupName}): \`${sha256}\``);
 }
 console.log(`GitHub release ${tag} published.`);
 
 const manifest = {
   version,
-  name: `Concord ${tag}`,
+  name: `Quintal ${tag}`,
   releaseDate: new Date().toISOString().slice(0, 10),
   downloadUrl: `https://github.com/${repo}/releases/download/${tag}/${setupName}`,
   sha256,

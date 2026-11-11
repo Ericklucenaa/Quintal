@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { Minus, Square, X, Radio, Heart } from 'lucide-react';
+import { Minus, Square, X, Heart } from 'lucide-react';
+import BrandMark from './BrandMark';
 
 const DONATE_URL = 'https://ko-fi.com/ericklucena';
 
@@ -32,8 +33,8 @@ export default function TitleBar() {
   return (
     <header className="titlebar">
       <div className="titlebar-brand">
-        <Radio className="titlebar-logo" />
-        <span>CONCORD</span>
+        <BrandMark className="titlebar-logo" />
+        <span>QUINTAL</span>
       </div>
 
       <div className="titlebar-actions">
@@ -43,7 +44,7 @@ export default function TitleBar() {
           href={DONATE_URL}
           target="_blank"
           rel="noopener noreferrer"
-          title="O Concord é grátis. Apoie o projeto no Ko-fi"
+          title="O Quintal é grátis. Apoie o projeto no Ko-fi"
         >
           <Heart size={13} />
           <span>Apoiar</span>

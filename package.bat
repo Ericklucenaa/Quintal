@@ -1,8 +1,8 @@
 @echo off
 cd /d "%~dp0"
-title Concord - Gerar Instalador Windows
+title Quintal - Gerar Instalador Windows
 echo ===================================================
-echo             CONCORD - GERANDO INSTALADOR .EXE
+echo             QUINTAL - GERANDO INSTALADOR .EXE
 echo ===================================================
 echo.
 echo Diretorio atual: %cd%

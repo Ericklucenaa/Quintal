@@ -91,7 +91,7 @@ function FriendsDashboard() {
         {activeTab === 'add' && (
           <section className="dashboard-section">
             <h2>Adicionar amigo</h2>
-            <p>Adicione pessoas pelo @apelido delas no Concord.</p>
+            <p>Adicione pessoas pelo @apelido delas no Quintal.</p>
             <form onSubmit={submit} className="add-friend-form">
               <input
                 className="form-input"
