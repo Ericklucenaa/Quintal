@@ -25,6 +25,8 @@ Aplicativo de comunicação para Windows (e web) com chat de texto em tempo real
 - **v1.2:** atalhos globais configuráveis, overlay nos jogos, janela que lembra tamanho/posição/monitor, envio de mensagens offline com reenvio
 - **v1.2:** convites com validade e limite de usos, privacidade de DM (só amigos), verificação de e-mail, exportar dados e excluir conta (LGPD), CSP, relatórios de erro
 
+- **v1.3 (Sala 3D):** canais de voz podem virar o **Terraço**, uma sala 3D ao entardecer onde cada pessoa anda como avatar (WASD, Shift para correr, `E` para sentar no sofá, na fogueira ou no balcão, `1`–`3` para gestos e reações com emoji). A TV da sala mostra a transmissão de tela de quem está apresentando (quem transmite vê um aviso, sem espelho infinito) e o **áudio espacial** deixa mais alto quem está perto. A posição viaja pelo próprio WebRTC da chamada (canal de dados, sem custo no Firebase), e toda mensagem recebida é validada. Botão "Sala 3D" no painel da chamada; a escolha fica salva.
+
 ## Arquitetura
 
 ```text
@@ -34,7 +36,8 @@ desktop/
   src/renderer/
     context/       Estado da aplicação (auth, servidores, DMs, presença, não lidas, voz, tela)
     services/cloud Acesso ao Firestore, separado por domínio
-    components/    Interface (chat compartilhado em components/chat)
+    components/    Interface (chat compartilhado em components/chat; sala 3D em components/room3d)
+    services/room3d Regras puras da sala 3D: layout, movimento, protocolo validado e áudio espacial
   tests/           Testes das regras de segurança e da camada de dados (emuladores do Firebase)
 firestore.rules    Regras de segurança — a única barreira entre clientes e os dados
 scripts/           Migração de dados e publicação de versões (credenciais de administrador)
@@ -60,6 +63,15 @@ npm run lint             # ESLint
 npm run build            # build de produção
 npm run test:unit        # testes unitários (sem emuladores)
 npm run test:emulators   # regras de segurança + camada de dados nos emuladores do Firebase
+npm run test:e2e         # chamada real em 3 janelas Electron (voz, tela, câmera, DM)
+npm run test:e2e:room3d  # sala 3D em 2 janelas: sincronização, áudio espacial, TV, segurança
+```
+
+Os testes de ponta a ponta precisam do Firebase CLI e de Java 11 ou mais novo. `SHOT_DIR=<pasta>` salva capturas da sala 3D e `E2E_VERBOSE=1` mostra toda a saída do Electron.
+
+O npm 11 só roda scripts de instalação aprovados: a lista fica em `allowScripts` no `desktop/package.json` (Electron, esbuild, Firebase, protobufjs e uiohook). Sem isso, o binário do Electron não é baixado.
+
+```bash
 ```
 
 O CI (GitHub Actions) roda lint, build e testes em todo push e PR. Em `main`, também publica a versão web no Firebase Hosting.

@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { Suspense, lazy, useEffect, useRef, useState } from 'react';
 import {
   Tv,
   Maximize2,
@@ -20,7 +20,9 @@ import {
   EyeOff,
   Activity,
   Shuffle,
-  Gauge
+  Gauge,
+  Box,
+  LayoutGrid
 } from 'lucide-react';
 import { useVoice } from '../context/VoiceContext';
 import { useScreenShare } from '../context/ScreenShareContext';
@@ -34,6 +36,9 @@ import { isModerator } from '../services/permissions';
 import { defaultAvatar } from '../services/cloud/util';
 import { logWarn } from '../services/log';
 import { hasTurnServer } from '../services/iceServers';
+
+// A sala 3D (Three.js) só é baixada quando alguém a abre.
+const Room3D = lazy(() => import('./room3d/Room3D'));
 
 const STATE_LABEL = { new: 'Iniciando', connecting: 'Conectando', connected: 'Conectado', disconnected: 'Caiu', failed: 'Falhou' };
 
@@ -146,6 +151,11 @@ export default function VoiceRoomArea({ embedded = false }) {
   const [diagnosticsOpen, setDiagnosticsOpen] = useState(false);
   const [teamDrawOpen, setTeamDrawOpen] = useState(false);
   const isDmCall = Boolean(activeVoiceChannel?.threadId);
+  const [room3d, setRoom3d] = useState(() => localStorage.getItem('concord_room3d') === 'true');
+  const show3d = room3d && !isDmCall;
+  useEffect(() => {
+    localStorage.setItem('concord_room3d', String(room3d));
+  }, [room3d]);
   const openUserMenu = useUserMenu();
 
   // What is on the stage (my capture or the stream I watch) is independent
@@ -263,7 +273,13 @@ export default function VoiceRoomArea({ embedded = false }) {
         </div>
       )}
 
-      {hasActiveStream ? (
+      {show3d ? (
+        <div className="voice-stage room3d-stage">
+          <Suspense fallback={<div className="room3d-fallback"><Box size={28} /><span>Preparando a sala 3D…</span></div>}>
+            <Room3D onExpandScreen={() => setRoom3d(false)} />
+          </Suspense>
+        </div>
+      ) : hasActiveStream ? (
         <div className="voice-stage with-stream">
           <div className="stream-frame">
             {streamReady ? (
@@ -363,6 +379,16 @@ export default function VoiceRoomArea({ embedded = false }) {
         >
           <Tv size={20} />
         </button>
+        {!isDmCall && (
+          <button
+            className={`dock-btn ${show3d ? 'on' : ''}`}
+            onClick={() => setRoom3d((v) => !v)}
+            title={show3d ? 'Voltar para a visualização clássica' : 'Entrar na sala 3D'}
+            aria-pressed={show3d}
+          >
+            {show3d ? <LayoutGrid size={20} /> : <Box size={20} />}
+          </button>
+        )}
         {!isDmCall && (
           <button className="dock-btn" onClick={() => setIsSoundboardOpen(true)} title="Soundboard">
             <Sparkles size={20} />

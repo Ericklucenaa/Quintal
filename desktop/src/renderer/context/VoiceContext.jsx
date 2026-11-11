@@ -21,12 +21,16 @@ import { createDenoisedStream } from '../services/noiseSuppression';
 import { createTempChannel, deleteTempChannel } from '../services/cloud/servers';
 import { useSettings } from '../services/settings';
 import { logWarn, quietly } from '../services/log';
+import { configurePanner, setListener, setPannerPosition } from '../services/room3d/spatial';
 
 const VoiceContext = createContext(null);
 
 const SPEAKING_THRESHOLD = 14;
 const STATS_INTERVAL_MS = 4000;
 const CAMERA_MAX_BITRATE = 1_200_000;
+// Canal de dados da sala 3D: negociado (mesmo id dos dois lados), então não
+// muda a sinalização e é ignorado por versões antigas do app.
+const ROOM_CHANNEL_ID = 7;
 
 /** Map key of a call: the server id, or `dm:<threadId>` for DM calls. */
 function roomKey(channel) {
@@ -115,7 +119,11 @@ export function VoiceProvider({ children }) {
   const localStreamRef = useRef(null);
   const peersRef = useRef(new Map()); // userId -> RTCPeerConnection
   const iceQueuesRef = useRef(new Map());
-  const remoteNodesRef = useRef(new Map()); // userId -> { audioEl, source, gain, analyser }
+  const remoteNodesRef = useRef(new Map()); // userId -> { audioEl, source, gain, analyser, panner }
+  // Sala 3D: áudio espacial e mensagens pelo canal de dados.
+  const spatialRef = useRef(false);
+  const roomListenersRef = useRef(new Set());
+  const roomOpenListenersRef = useRef(new Set());
   const outputCtxRef = useRef(null);
   const inputCtxRef = useRef(null);
   const animFrameRef = useRef(null);
@@ -397,11 +405,77 @@ export function VoiceProvider({ children }) {
     gain.gain.value = flags.current.isDeafened ? 0 : volumeFor(remoteUserId);
     const analyser = ctx.createAnalyser();
     analyser.fftSize = 256;
+    const panner = configurePanner(ctx.createPanner());
     source.connect(gain);
-    gain.connect(ctx.destination);
     source.connect(analyser);
-    remoteNodesRef.current.set(remoteUserId, { stream, audioEl, source, gain, analyser });
+    const nodes = { stream, audioEl, source, gain, analyser, panner };
+    routeOutput(nodes, ctx);
+    remoteNodesRef.current.set(remoteUserId, nodes);
   };
+
+  /** Ganho -> saída direta, ou ganho -> panner -> saída quando a sala 3D está ativa. */
+  function routeOutput(nodes, ctx) {
+    try {
+      nodes.gain.disconnect();
+      nodes.panner.disconnect();
+    } catch {
+      // Ainda não conectados.
+    }
+    if (spatialRef.current) {
+      nodes.gain.connect(nodes.panner);
+      nodes.panner.connect(ctx.destination);
+    } else {
+      nodes.gain.connect(ctx.destination);
+    }
+  }
+
+  const setSpatialAudio = useCallback((enabled) => {
+    if (spatialRef.current === Boolean(enabled)) return;
+    spatialRef.current = Boolean(enabled);
+    const ctx = outputCtxRef.current;
+    if (!ctx) return;
+    remoteNodesRef.current.forEach((nodes) => routeOutput(nodes, ctx));
+  }, []);
+
+  /** listener: { x, z, yaw }; positions: Map<userId, { x, z }>. */
+  const updateSpatialPositions = useCallback((listenerPos, positions) => {
+    const ctx = outputCtxRef.current;
+    if (!ctx || !spatialRef.current) return;
+    setListener(ctx.listener, listenerPos.x, listenerPos.z, listenerPos.yaw, ctx.currentTime);
+    remoteNodesRef.current.forEach((nodes, id) => {
+      const p = positions.get(id);
+      if (p) setPannerPosition(nodes.panner, p.x, p.z, ctx.currentTime);
+    });
+  }, []);
+
+  /** Envia uma mensagem da sala 3D para todos (ou só para `toUserId`). */
+  const sendRoomMessage = useCallback((text, toUserId = null) => {
+    peersRef.current.forEach((pc, id) => {
+      if (toUserId && id !== toUserId) return;
+      const dc = pc.__room;
+      if (dc?.readyState === 'open') {
+        try {
+          dc.send(text);
+        } catch (err) {
+          logWarn('room send', err);
+        }
+      }
+    });
+  }, []);
+
+  const onRoomMessage = useCallback((fn) => {
+    roomListenersRef.current.add(fn);
+    return () => roomListenersRef.current.delete(fn);
+  }, []);
+
+  const onRoomPeerOpen = useCallback((fn) => {
+    roomOpenListenersRef.current.add(fn);
+    return () => roomOpenListenersRef.current.delete(fn);
+  }, []);
+
+  const roomPeersOpen = useCallback(() => Array.from(peersRef.current.entries())
+    .filter(([, pc]) => pc.__room?.readyState === 'open')
+    .map(([id]) => id), []);
 
   function detachRemote(remoteUserId) {
     const nodes = remoteNodesRef.current.get(remoteUserId);
@@ -409,6 +483,7 @@ export function VoiceProvider({ children }) {
     try {
       nodes.source.disconnect();
       nodes.gain.disconnect();
+      nodes.panner?.disconnect();
     } catch (err) {
       logWarn('detach audio', err);
     }
@@ -500,6 +575,17 @@ export function VoiceProvider({ children }) {
     if (initiator) {
       pc.addTransceiver('video', { direction: 'sendrecv' });
       attachCamera(pc);
+    }
+    try {
+      const dc = pc.createDataChannel('concord-room', { negotiated: true, id: ROOM_CHANNEL_ID });
+      dc.onmessage = (event) => {
+        if (typeof event.data !== 'string') return;
+        roomListenersRef.current.forEach((fn) => fn(remoteUserId, event.data));
+      };
+      dc.onopen = () => roomOpenListenersRef.current.forEach((fn) => fn(remoteUserId));
+      pc.__room = dc;
+    } catch (err) {
+      logWarn('room channel', err);
     }
 
     pc.onicecandidate = (event) => {
@@ -1113,6 +1199,12 @@ export function VoiceProvider({ children }) {
         noiseGateEnabled,
         automaticSensitivity,
         noiseGateThreshold,
+        setSpatialAudio,
+        updateSpatialPositions,
+        sendRoomMessage,
+        onRoomMessage,
+        onRoomPeerOpen,
+        roomPeersOpen,
         updateNoiseSuppression,
         updateEchoCancellation,
         updateAutoGainControl,

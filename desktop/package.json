@@ -18,7 +18,8 @@
     "dist:win": "vite build && electron-builder --win --x64 --publish never",
     "package:win": "npm run dist:win",
     "test:unit": "vitest run tests/unit",
-    "test:e2e": "firebase emulators:exec --project concord-3af70 --only firestore,auth \"node tests/e2e/run.mjs\""
+    "test:e2e": "firebase emulators:exec --project concord-3af70 --only firestore,auth \"node tests/e2e/run.mjs\"",
+    "test:e2e:room3d": "cross-env E2E_SPEC=room3d.cjs firebase emulators:exec --project concord-3af70 --only firestore,auth \"node tests/e2e/run.mjs\""
   },
   "build": {
     "appId": "com.concord.app",
@@ -66,6 +67,7 @@
   },
   "dependencies": {
     "@sapphi-red/web-noise-suppressor": "^0.4.1",
+    "three": "^0.187.0",
     "uiohook-napi": "^1.5.5"
   },
   "devDependencies": {
@@ -88,5 +90,12 @@
     "react-dom": "^18.3.1",
     "vite": "^6.1.0",
     "vitest": "^3.2.7"
+  },
+  "allowScripts": {
+    "electron@34.5.8": true,
+    "esbuild@0.25.12": true,
+    "@firebase/util@1.15.3": true,
+    "protobufjs@7.6.6": true,
+    "uiohook-napi@1.5.5": true
   }
 }

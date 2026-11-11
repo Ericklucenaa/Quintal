@@ -8,6 +8,7 @@ import './styles/voice.css';
 import './styles/v12.css';
 import './styles/themes.css';
 import './styles/appearance.css';
+import './styles/room3d.css';
 import { applyAppearance } from './services/appearance';
 
 // Apply the saved theme, accent and chat background before the first paint.

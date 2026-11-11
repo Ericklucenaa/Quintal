@@ -1,4 +1,4 @@
-// Runs tests/e2e/call.cjs: starts Vite against the Firebase emulators and
+// Runs tests/e2e/call.cjs (or E2E_SPEC, e.g. room3d.cjs): starts Vite against the Firebase emulators and
 // drives three real Electron windows. Use through `npm run test:e2e`
 // (which wraps this in `firebase emulators:exec`). Windows/desktop only:
 // the screen-share checks capture the real screen.
@@ -24,7 +24,8 @@ if (!ready) {
   process.exit(1);
 }
 
-const electron = spawn('npx', ['electron', path.join(desktop, 'tests/e2e/call.cjs')], {
+const spec = process.env.E2E_SPEC || 'call.cjs';
+const electron = spawn('npx', ['electron', path.join(desktop, 'tests/e2e', spec)], {
   cwd: desktop,
   env: { ...env, CONCORD_MAIN: path.join(desktop, 'src/main/index.cjs') },
   shell: true
