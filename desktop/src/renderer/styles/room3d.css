@@ -10,7 +10,7 @@
 .room3d-canvas:active { cursor: grabbing; }
 
 .room3d-labels { position: absolute; inset: 0; z-index: 1; pointer-events: none; overflow: hidden; }
-.room3d-help, .room3d-help-toggle, .room3d-hint, .room3d-top-right, .room3d-presenters, .room3d-actions, .room3d-muted { z-index: 2; }
+.room3d-help, .room3d-help-toggle, .room3d-own-note, .room3d-hint, .room3d-top-right, .room3d-presenters, .room3d-actions, .room3d-muted { z-index: 2; }
 .room3d-label {
   position: absolute; left: 0; top: 0; display: flex; align-items: center; gap: 6px;
   padding: 3px 9px 3px 3px; border-radius: var(--radius-full);
@@ -114,3 +114,32 @@
   .room3d-actions { bottom: 88px; max-width: calc(100% - 24px); overflow-x: auto; }
   .room3d-actions button:not(.room3d-emoji) { padding: 0 8px; }
 }
+
+/* Temas */
+.room3d-theme { position: relative; }
+.room3d-theme-menu {
+  position: absolute; right: 0; top: 40px; z-index: 3; width: 268px; padding: 6px;
+  border-radius: var(--radius-md); background: rgba(16, 16, 24, 0.94); border: 1px solid rgba(255, 255, 255, 0.1);
+  box-shadow: var(--shadow-lg); backdrop-filter: blur(14px);
+}
+.room3d-theme-menu button {
+  width: 100%; display: flex; align-items: center; gap: 10px; padding: 8px 10px; border: none; border-radius: 9px;
+  background: transparent; color: rgba(244, 241, 234, 0.9); font-size: 13px; font-weight: 600; text-align: left; cursor: pointer;
+}
+.room3d-theme-menu button:hover { background: rgba(255, 255, 255, 0.08); }
+.room3d-theme-menu button.active { background: rgba(255, 255, 255, 0.12); color: #fff; }
+.room3d-theme-name { flex: 1; }
+.room3d-theme-menu em { font-style: normal; font-size: 10px; font-weight: 600; color: #9fe6ff; background: rgba(63, 208, 255, 0.14); padding: 2px 6px; border-radius: 999px; }
+.room3d-swatch { display: inline-flex; border-radius: 6px; overflow: hidden; border: 1px solid rgba(255, 255, 255, 0.15); }
+.room3d-swatch i { width: 10px; height: 18px; display: block; }
+.room3d-theme-note { padding: 6px 10px 4px; font-size: 11px; color: rgba(244, 241, 234, 0.55); }
+
+/* Aviso quando a minha própria tela está na TV */
+.room3d-own-note {
+  position: absolute; left: 50%; top: 56px; transform: translateX(-50%); z-index: 2; max-width: min(560px, calc(100% - 32px));
+  padding: 6px 12px; border-radius: var(--radius-full); background: rgba(14, 14, 22, 0.7); color: rgba(244, 241, 234, 0.85);
+  font-size: 12px; text-align: center; pointer-events: none;
+}
+
+.room3d-actions .room3d-throw { background: var(--accent-gradient); color: #fff; }
+.room3d-actions .room3d-throw:hover { filter: brightness(1.08); background: var(--accent-gradient); }

@@ -16,7 +16,7 @@ import {
   listenToSoundboard,
   VOICE_HEARTBEAT_MS
 } from '../services/cloud/voice';
-import { soundSynthesizer } from '../services/soundEffects';
+import { soundSynthesizer, playAppSound } from '../services/soundEffects';
 import { createDenoisedStream } from '../services/noiseSuppression';
 import { createTempChannel, deleteTempChannel } from '../services/cloud/servers';
 import { useSettings } from '../services/settings';
@@ -124,6 +124,8 @@ export function VoiceProvider({ children }) {
   const spatialRef = useRef(false);
   const roomListenersRef = useRef(new Set());
   const roomOpenListenersRef = useRef(new Set());
+  // Última lista de quem estava na sala (para os sons de entrada e saída).
+  const prevRoomRef = useRef({ channelId: null, ids: new Set() });
   const outputCtxRef = useRef(null);
   const inputCtxRef = useRef(null);
   const animFrameRef = useRef(null);
@@ -737,9 +739,21 @@ export function VoiceProvider({ children }) {
     } else if (seenSelfRef.current && !leavingRef.current) {
       seenSelfRef.current = false;
       teardown();
+      playAppSound('voice-leave-self');
       showToast('Você foi desconectado do canal de voz.', 'warning');
       return;
     }
+
+    // Sons de alguém entrando ou saindo (só depois que eu já apareço na sala,
+    // para não tocar um aviso por pessoa que já estava lá quando entrei).
+    const prev = prevRoomRef.current;
+    if (prev.channelId === active.id && prev.ids.has(userId) && ids.includes(userId) && !flags.current.isDeafened) {
+      const joined = ids.some((id) => id !== userId && !prev.ids.has(id));
+      const left = Array.from(prev.ids).some((id) => id !== userId && !ids.includes(id));
+      if (joined) playAppSound('voice-user-join');
+      else if (left) playAppSound('voice-user-leave');
+    }
+    prevRoomRef.current = { channelId: active.id, ids: new Set(ids) };
 
     ids.forEach((id) => {
       if (id !== userId && String(userId) < String(id) && !peersRef.current.has(id)) initiateOffer(id, active.id);
@@ -857,6 +871,7 @@ export function VoiceProvider({ children }) {
     leavingRef.current = true;
     quietly('leave voice', leaveVoicePresence(userId));
     teardown();
+    playAppSound('voice-leave-self');
     setTimeout(() => {
       leavingRef.current = false;
     }, 1000);
@@ -901,6 +916,7 @@ export function VoiceProvider({ children }) {
         ? { threadId: channel.threadId, channelId: channel.id }
         : { serverId, channelId: channel.id };
       await joinVoicePresence(user, room, { isMuted, isDeafened });
+      playAppSound('voice-join-self');
     } catch (err) {
       logWarn('join voice', err);
       showError('Erro na voz', 'Não foi possível entrar no canal de voz.');

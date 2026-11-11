@@ -27,7 +27,15 @@ Aplicativo de comunicação para Windows (e web) com chat de texto em tempo real
 - **v1.2:** atalhos globais configuráveis, overlay nos jogos, janela que lembra tamanho/posição/monitor, envio de mensagens offline com reenvio
 - **v1.2:** convites com validade e limite de usos, privacidade de DM (só amigos), verificação de e-mail, exportar dados e excluir conta (LGPD), CSP, relatórios de erro
 
-- **v1.3 (Sala 3D):** canais de voz podem virar o **Terraço**, uma sala 3D ao entardecer onde cada pessoa anda como avatar (WASD, Shift para correr, `E` para sentar no sofá, na fogueira ou no balcão, `1`–`3` para gestos e reações com emoji). A TV da sala mostra a transmissão de tela de quem está apresentando (quem transmite vê um aviso, sem espelho infinito) e o **áudio espacial** deixa mais alto quem está perto. A posição viaja pelo próprio WebRTC da chamada (canal de dados, sem custo no Firebase), e toda mensagem recebida é validada. Botão "Sala 3D" no painel da chamada; a escolha fica salva.
+- **v1.3 (Sala 3D):** canais de voz podem virar uma sala 3D onde cada pessoa anda como avatar:
+  - **Movimento:** andar (WASD), correr (Shift), pular (Espaço), subir em mesa, sofá e balcão, e sentar (`E`) no sofá, na fogueira ou no balcão.
+  - **Objetos:** pegar e soltar (`F`), arremessar (`G` ou clique) e acertar os outros, que cambaleiam, ficam tontos e são empurrados. Cada ação tem animação e som.
+  - **Gestos e reações:** gestos (`1` a `3`) e reações com emoji.
+  - **6 temas:** Terraço ao entardecer, Luau na praia, Chalé na neve, Base lunar (com gravidade baixa), Acampamento na floresta e Telhado na chuva. O tema muda para todos na sala.
+  - **TV:** mostra a transmissão de tela, inclusive a sua.
+  - **Áudio espacial:** deixa mais alto quem está perto.
+  - **Sincronização e segurança:** posições, objetos e temas viajam pelo próprio WebRTC da chamada (canal de dados, sem custo no Firebase), e toda mensagem recebida é validada.
+- **Sons da chamada:** sons diferentes para você entrar, alguém entrar, alguém sair, você sair, e para uma transmissão começar ou parar. Dá para desligar em Configurações.
 
 ## Arquitetura
 

@@ -27,6 +27,11 @@ app.whenReady().then(async () => {
       width: 1280, height: 800, show: false,
       webPreferences: { offscreen: true, preload: PRELOAD, contextIsolation: true, sandbox: false, partition: part, backgroundThrottling: false }
     });
+    if (process.env.E2E_CONSOLE) {
+      w.webContents.on('console-message', (_e, level, message) => {
+        if (level >= 2 || /THREE|WebGL|context/i.test(message)) console.log(`CONSOLE ${part} ${level} ${message.slice(0, 300)}`);
+      });
+    }
     const ses = w.webContents.session;
     ses.setPermissionRequestHandler((_wc, _p, cb) => cb(true));
     ses.setDisplayMediaRequestHandler(async (_req, cb) => {
@@ -71,6 +76,11 @@ app.whenReady().then(async () => {
     await sleep(6000);
     const base = await audibleRemotes(A);
     check('base: A e B se ouvem antes da sala 3D', base.audible >= 1, JSON.stringify(base));
+    const soundsA = await api(A).js('return window.__appSoundLog || []');
+    const soundsB = await api(B).js('return window.__appSoundLog || []');
+    check('sons: cada um ouve o som de "entrei na chamada"', soundsA.includes('voice-join-self') && soundsB.includes('voice-join-self'), `A=${soundsA} B=${soundsB}`);
+    check('sons: A ouve o som de "alguém entrou" quando B chega', soundsA.includes('voice-user-join'), soundsA.join(','));
+    check('sons: B não ouve "alguém entrou" pelas pessoas que já estavam lá', !soundsB.includes('voice-user-join'), soundsB.join(','));
 
     // --- Entrar na sala 3D ---------------------------------------------------
     for (const [n, w] of [['A', A], ['B', B]]) {
@@ -140,12 +150,97 @@ app.whenReady().then(async () => {
     check('reação: B vê a reação de A', reacted.includes('🔥'), reacted);
     await shot(B, '03_danca_e_reacao');
 
+    // --- Pular e subir -------------------------------------------------------
+    await api(A).js('window.__room3d.teleport(-3, 5.6); return true;');
+    await sleep(600);
+    // B observa a altura de A enquanto A pula
+    await api(B).js('window.__room3d.resetPeakY(); return true;');
+    const ownPeak = await api(A).js(`
+      window.__room3d.jump();
+      let peak = 0;
+      const t0 = performance.now();
+      await new Promise((resolve) => {
+        const tick = () => {
+          peak = Math.max(peak, window.__room3d.me().y || 0);
+          if (performance.now() - t0 < 1500) setTimeout(tick, 20); else resolve();
+        };
+        tick();
+      });
+      return peak;
+    `);
+    await sleep(600);
+    const peak = await api(B).js(`return window.__room3d.peakY('${aId}')`);
+    check('pulo: A pula e B vê A no ar', ownPeak > 0.5 && peak > 0.5, `altura de A: ${ownPeak.toFixed(2)} m; vista por B: ${peak.toFixed(2)} m`);
+
+    await api(A).js(`window.__room3d.teleport(-1.6, -2.9); window.__room3d.setCamYaw(Math.PI / 2); window.__room3d.press('forward', true); return true;`);
+    await sleep(500);
+    await api(A).js(`window.__room3d.press('forward', false); return true;`);
+    await sleep(900);
+    const onTable = await api(A).js('return window.__room3d.me()');
+    const onTableSeen = await api(B).js(`return window.__room3d.remote()['${aId}']`);
+    check('subir: A sobe na mesa andando e B vê A em cima dela', Math.abs(onTable.y - 0.36) < 0.02 && Math.abs(onTableSeen.y - 0.36) < 0.05, `A y=${onTable.y.toFixed(2)} visto=${onTableSeen.y}`);
+
+    // --- Pegar e arremessar em alguém -----------------------------------------
+    await api(A).js('window.__room3d.teleport(-1.0, 5.7); return true;');
+    await api(B).js('window.__room3d.teleport(1.8, 5.7); return true;');
+    await sleep(1200);
+    await api(A).js('window.__room3d.grab(); return true;');
+    await sleep(800);
+    const heldA = await api(A).js('return window.__room3d.me().holding');
+    const heldSeen = await api(B).js(`return window.__room3d.objects()[${JSON.stringify('o0')}].holder`);
+    check('pegar: A pega o objeto e B vê na mão de A', heldA === 'o0' && heldSeen === aId, `A=${heldA} visto=${heldSeen}`);
+    await shot(B, '06_A_segurando');
+    const bPos = await api(B).js('return window.__room3d.me()');
+    const hitsBefore = await api(B).js('return window.__room3d.hitsTaken()');
+    await api(A).js(`window.__room3d.throwAt(${bPos.x}, ${bPos.z}); return true;`);
+    await sleep(350);
+    await shot(B, '07_atingido');
+    await sleep(2500);
+    const hitsAfter = await api(B).js('return window.__room3d.hitsTaken()');
+    check('arremesso: o objeto de A acerta B (golpe, atordoamento e empurrão)', hitsAfter > hitsBefore, `golpes em B: ${hitsBefore} → ${hitsAfter}`);
+    await sleep(2500);
+    const restA = await api(A).js(`return window.__room3d.objects().o0`);
+    const restB = await api(B).js(`return window.__room3d.objects().o0`);
+    check('arremesso: o objeto para no mesmo lugar para os dois',
+      !restA.moving && !restB.moving && Math.hypot(restA.x - restB.x, restA.z - restB.z) < 0.3,
+      `A=(${restA.x.toFixed(2)}, ${restA.z.toFixed(2)}) B=(${restB.x.toFixed(2)}, ${restB.z.toFixed(2)})`);
+    const roomSounds = await api(B).js('return window.__appSoundLog || []');
+    check('sons: B ouve pegar, arremessar e o golpe', ['room-pick', 'room-throw', 'room-hit'].every((x) => roomSounds.includes(x)), roomSounds.join(','));
+
+    // --- Temas sincronizados --------------------------------------------------
+    const themes = await api(A).js(`const m = await import('/src/renderer/services/room3d/themes.js'); return m.THEME_IDS;`);
+    await api(B).js('window.__room3d.teleport(0, 4.8); window.__room3d.setCamYaw(Math.PI); return true;');
+    let themesOk = true;
+    for (const id of themes) {
+      await api(A).js(`window.__room3d.setTheme(${JSON.stringify(id)}); return true;`);
+      let seen = '';
+      for (let i = 0; i < 20 && seen !== id; i++) {
+        await sleep(200);
+        seen = await api(B).js('return window.__room3d.theme()');
+      }
+      if (seen !== id) themesOk = false;
+      await sleep(1500);
+      await shot(B, `tema_${id}`);
+      const gl = await api(B).js('return window.__room3d.gl()');
+      if (gl.lost || gl.error || gl.calls < 20) themesOk = false;
+      console.log('DIAG tema ' + id + ' ' + JSON.stringify(gl));
+    }
+    check(`temas: os ${themes.length} temas trocam para todos na sala`, themesOk && themes.length >= 6, themes.join(', '));
+    await api(A).js(`window.__room3d.setTheme('terraco'); return true;`);
+    await sleep(800);
+
     // --- TV com transmissão de tela ------------------------------------------
     await startShare(A, 'A');
     await api(B).waitFor(`window.__room3d.tvMode() === 'video'`, 'TV de B mostra a tela de A', 25000);
     check('TV: B assiste a tela de A na TV da sala', true);
-    const tvA = await api(A).js('return window.__room3d.tvMode()');
-    check('TV: quem transmite vê um aviso (sem espelho infinito)', tvA === 'self', tvA);
+    await api(A).waitFor(`window.__room3d.tvMode() === 'video' && window.__room3d.tvLocal()`, 'A vê a própria tela na TV', 15000);
+    check('TV: quem transmite vê a própria tela na TV', true);
+    const sw0 = await api(B).js('return window.__room3d.tvSwitches()');
+    await sleep(5000);
+    const sw1 = await api(B).js('return window.__room3d.tvSwitches()');
+    check('TV: a fonte da TV fica estável assistindo (não pisca)', sw1 === sw0, `trocas de fonte em 5 s: ${sw1 - sw0}`);
+    const shareSounds = await api(B).js('return window.__appSoundLog || []');
+    check('sons: B ouve o som de "transmissão começou"', shareSounds.includes('screen-start'), shareSounds.join(','));
     await api(B).js('window.__room3d.teleport(0, 0.3); window.__room3d.setCamYaw(Math.PI); return true;');
     await sleep(2500);
     await shot(B, '04_tv_com_a_tela_de_A');
@@ -159,6 +254,8 @@ app.whenReady().then(async () => {
     const tvDiag = await api(B).js(`return { mode: window.__room3d.tvMode(), aoVivo: [...document.querySelectorAll('.live-badge')].length }`);
     const aDock = await api(A).js(`return { sharing: Boolean(document.querySelector('.dock-btn.on[title="Parar transmissão"]')) }`);
     check('TV: ao parar a transmissão, a TV volta ao aviso', tvBack, JSON.stringify({ B: tvDiag, A: aDock }));
+    const stopSounds = await api(B).js('return window.__appSoundLog || []');
+    check('sons: B ouve o som de "transmissão parou" (diferente do de começar)', stopSounds.includes('screen-stop'), stopSounds.join(','));
 
     // --- Mensagens maliciosas são ignoradas ----------------------------------
     const bad = await api(A).js(`
@@ -175,6 +272,13 @@ app.whenReady().then(async () => {
     check('clássico: ao sair da sala 3D, B continua ouvindo A', heard.audible >= 1, JSON.stringify(heard));
     const persisted = await api(B).js(`return localStorage.getItem('concord_room3d')`);
     check('preferência: a escolha do modo fica salva', persisted === 'false', persisted);
+
+    // --- Sair da chamada --------------------------------------------------------
+    await api(B).js(`document.querySelector('.dock-btn.leave').click(); return true;`);
+    await sleep(4000);
+    const leaveA = await api(A).js('return window.__appSoundLog || []');
+    const leaveB = await api(B).js('return window.__appSoundLog || []');
+    check('sons: A ouve "alguém saiu" e B ouve "saí da chamada"', leaveA.includes('voice-user-leave') && leaveB.includes('voice-leave-self'), `A=${leaveA.slice(-4)} B=${leaveB.slice(-4)}`);
   } catch (e) {
     check('execução do teste', false, e.message.slice(0, 600));
   } finally {

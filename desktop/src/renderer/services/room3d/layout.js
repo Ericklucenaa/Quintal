@@ -13,19 +13,20 @@ export const FACE_SCREEN = Math.PI;
 
 export const SCREEN = { x: 0, y: 2.35, z: -6.55, width: 6.4, height: 3.6 };
 
-// Retângulos de colisão (centro x/z, largura w em x, profundidade d em z).
+// Retângulos de colisão (centro x/z, largura w em x, profundidade d em z) e altura
+// do topo (h). Dá para subir no que tem topo baixo (degrau) ou pulando.
 export const COLLIDERS = [
-  { id: 'telao', x: 0, z: -6.55, w: 7.2, d: 0.7 },
-  { id: 'sofa-centro', x: 0, z: -1.2, w: 3.3, d: 1.0 },
-  { id: 'sofa-oeste', x: -2.75, z: -2.3, w: 1.0, d: 2.6 },
-  { id: 'sofa-leste', x: 2.75, z: -2.3, w: 1.0, d: 2.6 },
-  { id: 'mesa-centro', x: 0, z: -2.9, w: 1.6, d: 0.8 },
-  { id: 'fogueira', x: 0, z: 3.2, w: 1.7, d: 1.7 },
-  { id: 'balcao', x: 7.6, z: 0.5, w: 1.0, d: 5.2 },
-  { id: 'vaso-no', x: -8.2, z: -6.2, w: 0.9, d: 0.9 },
-  { id: 'vaso-ne', x: 8.2, z: -6.2, w: 0.9, d: 0.9 },
-  { id: 'vaso-so', x: -8.2, z: 6.2, w: 0.9, d: 0.9 },
-  { id: 'vaso-se', x: 8.2, z: 6.2, w: 0.9, d: 0.9 }
+  { id: 'telao', x: 0, z: -6.55, w: 7.2, d: 0.7, h: 4.6 },
+  { id: 'sofa-centro', x: 0, z: -1.2, w: 3.3, d: 1.0, h: 0.62 },
+  { id: 'sofa-oeste', x: -2.75, z: -2.3, w: 1.0, d: 2.6, h: 0.62 },
+  { id: 'sofa-leste', x: 2.75, z: -2.3, w: 1.0, d: 2.6, h: 0.62 },
+  { id: 'mesa-centro', x: 0, z: -2.9, w: 1.6, d: 0.8, h: 0.36 },
+  { id: 'fogueira', x: 0, z: 3.2, w: 1.7, d: 1.7, h: 3.0 },
+  { id: 'balcao', x: 7.6, z: 0.5, w: 1.0, d: 5.2, h: 1.13 },
+  { id: 'vaso-no', x: -8.2, z: -6.2, w: 0.9, d: 0.9, h: 0.55 },
+  { id: 'vaso-ne', x: 8.2, z: -6.2, w: 0.9, d: 0.9, h: 0.55 },
+  { id: 'vaso-so', x: -8.2, z: 6.2, w: 0.9, d: 0.9, h: 0.55 },
+  { id: 'vaso-se', x: 8.2, z: 6.2, w: 0.9, d: 0.9, h: 0.55 }
 ];
 
 // Assentos: posição de quem senta, para onde olha e onde a pessoa fica ao levantar.
@@ -60,3 +61,12 @@ export function spawnFor(userId) {
   for (const ch of String(userId)) h = (h * 31 + ch.charCodeAt(0)) >>> 0;
   return { ...SPAWNS[h % SPAWNS.length], yaw: FACE_SCREEN };
 }
+
+// Objetos que dá para pegar e arremessar. Os ids são fixos em todos os temas
+// (o tema só muda a aparência), então a sincronização não depende do tema.
+export const THROWABLE_SPAWNS = [
+  { id: 'o0', x: -1.0, z: 4.9 }, { id: 'o1', x: 1.0, z: 4.9 }, { id: 'o2', x: -4.2, z: 2.0 },
+  { id: 'o3', x: 4.2, z: 2.0 }, { id: 'o4', x: -0.4, z: -2.9, y: 0.36 }, { id: 'o5', x: 0.4, z: -2.9, y: 0.36 },
+  { id: 'o6', x: 7.6, z: -1.5, y: 1.13 }, { id: 'o7', x: -6.5, z: -4.5 }
+];
+export const THROWABLE_IDS = THROWABLE_SPAWNS.map((o) => o.id);

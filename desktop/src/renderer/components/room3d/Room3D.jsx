@@ -1,21 +1,34 @@
 import React, { useEffect, useRef, useState } from 'react';
 import * as THREE from 'three';
-import { MicOff, Headphones, Maximize2, Box, Hand, Music, PartyPopper, HelpCircle, X } from 'lucide-react';
+import { MicOff, Headphones, Maximize2, Box, Hand, Music, PartyPopper, HelpCircle, X, Palette, Check } from 'lucide-react';
 import { useVoice } from '../../context/VoiceContext';
 import { useScreenShare } from '../../context/ScreenShareContext';
 import { useAuth } from '../../context/AuthContext';
 import { defaultAvatar } from '../../services/cloud/util';
 import { logWarn } from '../../services/log';
-import { SEATS, spawnFor } from '../../services/room3d/layout';
-import { step, nearestSeat, sitAt, lerpAngle, resolve } from '../../services/room3d/movement';
-import { decode, encodeReaction, encodeState, createRateLimiter, REACTIONS } from '../../services/room3d/protocol';
-import { buildTerrace, drawPlaceholder, makePlaceholderCanvas } from './terraceScene';
+import { playAppSound } from '../../services/soundEffects';
+import { SEATS, spawnFor, THROWABLE_SPAWNS } from '../../services/room3d/layout';
+import { step, nearestSeat, sitAt, lerpAngle, resolve, groundAt } from '../../services/room3d/movement';
+import {
+  decode, encodeReaction, encodeState, encodeGrab, encodeThrow, encodeDrop, encodeRest, encodeHit,
+  encodeTheme, encodeSnapshot, createRateLimiter, REACTIONS
+} from '../../services/room3d/protocol';
+import {
+  initialObjects, stepObject, advanceThrown, throwFrom, dropFrom, nearestPickable, bounceOffPerson, speedOf
+} from '../../services/room3d/throwables';
+import { THEMES, DEFAULT_THEME, themeById } from '../../services/room3d/themes';
+import { spatialGain } from '../../services/room3d/spatial';
+import { buildRoom, drawPlaceholder, makePlaceholderCanvas } from './roomScene';
+import { makeThrowable } from './props';
 import { Avatar } from './avatar';
 
 const SEND_INTERVAL = 100; // ms (10 Hz enquanto algo muda)
 const HEARTBEAT = 1500; // ms (estado completo mesmo parado)
 const SPATIAL_INTERVAL = 100;
 const MAX_PIXEL_RATIO = 1.75;
+const STUN_SECONDS = 0.5;
+const KNOCKBACK = 5.5;
+const PLACEHOLDER_DELAY = 1200; // ms sem vídeo antes de voltar ao aviso (evita piscar)
 
 const KEYMAP = {
   KeyW: 'forward', ArrowUp: 'forward',
@@ -40,19 +53,34 @@ function isEditable(el) {
   return tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || el.isContentEditable;
 }
 
+const themeKey = (channelId) => `concord_room3d_theme_${channelId}`;
+function readTheme(channelId) {
+  try {
+    const v = JSON.parse(localStorage.getItem(themeKey(channelId)) || 'null');
+    if (v && THEMES.some((t) => t.id === v.id) && Number.isFinite(v.ts)) return v;
+  } catch {
+    // preferência corrompida: usa o padrão
+  }
+  return { id: DEFAULT_THEME, ts: 0 };
+}
+
 export default function Room3D({ onExpandScreen }) {
   const { user } = useAuth();
   const voice = useVoice();
   const share = useScreenShare();
   const myId = user?.id;
+  const channelId = voice.activeVoiceChannel?.id || 'sala';
 
   const mountRef = useRef(null);
   const labelsRef = useRef(null);
   const [spatialOn, setSpatialOn] = useState(() => localStorage.getItem('concord_room3d_spatial') !== 'false');
   const [hint, setHint] = useState('');
   const [failed, setFailed] = useState(!hasWebGL2());
-  // Atalhos visíveis ao entrar; recolhem sozinhos para não cobrir a TV.
   const [helpOpen, setHelpOpen] = useState(true);
+  const [themeId, setThemeId] = useState(() => readTheme(channelId).id);
+  const [themeMenu, setThemeMenu] = useState(false);
+  const [holding, setHolding] = useState(false);
+
   useEffect(() => {
     const timer = setTimeout(() => setHelpOpen(false), 9000);
     return () => clearTimeout(timer);
@@ -63,28 +91,41 @@ export default function Room3D({ onExpandScreen }) {
   live.current.voiceUsers = voice.voiceUsers;
   live.current.spatialOn = spatialOn;
 
-  // Comandos da interface para dentro do laço
   const commandsRef = useRef({});
 
-  // TV: qual transmissão mostrar
-  const watchedStream = share.watching ? share.remoteScreenStreams.get(share.watching.userId) || null : null;
+  // TV: a mesma regra do palco clássico (minha tela quando eu foco nela ou não assisto ninguém).
+  const tvStream = share.displayedStream || null;
   live.current.tv = {
-    stream: watchedStream,
-    mode: watchedStream ? 'video'
-      : share.watching ? 'waiting'
-        : share.isScreenSharing ? 'self' : 'idle',
+    stream: tvStream,
+    local: Boolean(share.showingLocal),
+    mode: tvStream ? 'video' : share.watching ? 'waiting' : 'idle',
     who: share.watching?.username || ''
   };
 
   // Assistir automaticamente a primeira transmissão da sala quando não houver outra escolhida.
+  // Quem eu deixei de assistir (transmissão parou ou cliquei para parar) não volta
+  // sozinho para a TV até começar uma nova transmissão: evita a TV alternar entre
+  // vídeo e "Conectando…" enquanto a presença da pessoa ainda não foi atualizada.
+  const declinedRef = useRef(new Set());
+  const lastWatchedRef = useRef(null);
+  const presenterIds = share.presenters.map((p) => p.userId).join(',');
   const otherPresenters = share.presenters.filter((p) => p.userId !== myId);
-  const firstOther = otherPresenters[0];
   useEffect(() => {
-    if (!share.watching && firstOther && voice.activeVoiceChannel) {
-      share.watchStream(firstOther, voice.activeVoiceChannel);
+    const live = new Set(presenterIds ? presenterIds.split(',') : []);
+    const current = share.watching?.userId || null;
+    // Deixei de assistir alguém que ainda aparece transmitindo: não volta sozinho.
+    const last = lastWatchedRef.current;
+    if (last && last !== current && live.has(last)) declinedRef.current.add(last);
+    lastWatchedRef.current = current;
+    // Quem parou de transmitir sai da lista; a próxima transmissão dele liga a TV de novo.
+    declinedRef.current.forEach((id) => { if (!live.has(id)) declinedRef.current.delete(id); });
+    // Candidato calculado aqui, depois de atualizar a lista (e não durante a renderização).
+    const candidate = share.presenters.find((p) => p.userId !== myId && !declinedRef.current.has(p.userId));
+    if (!share.watching && candidate && voice.activeVoiceChannel && !share.isScreenSharing) {
+      share.watchStream(candidate, voice.activeVoiceChannel);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [firstOther?.userId, share.watching?.userId]);
+  }, [presenterIds, share.watching?.userId, share.isScreenSharing]);
 
   useEffect(() => {
     localStorage.setItem('concord_room3d_spatial', String(spatialOn));
@@ -116,8 +157,23 @@ export default function Room3D({ onExpandScreen }) {
     // O canvas vai por baixo das sobreposições (nomes, reações, barras).
     mount.prepend(renderer.domElement);
 
-    const { scene, screenMesh, update: updateScene } = buildTerrace();
-    const camera = new THREE.PerspectiveCamera(55, 1, 0.1, 200);
+    // near = 0,25 m: mais precisão de profundidade (menos tremulação a distância).
+    const camera = new THREE.PerspectiveCamera(55, 1, 0.25, 300);
+
+    // --- Estado do laço ---
+    let theme = themeById(readTheme(channelId).id);
+    let themeStamp = readTheme(channelId).ts;
+    let room = null; // { scene, screenMesh, update }
+    const avatars = new Map(); // userId -> { avatar, shown, label, lastNonce, user, wasAir }
+    const remoteStates = new Map();
+    const objects = initialObjects();
+    const objMeshes = new Map();
+    const reactionLimiter = createRateLimiter(4, 2000);
+    const hitLimiter = createRateLimiter(4, 1000);
+    let hitsTaken = 0;
+    let renderError = null;
+    const peakY = new Map(); // maior altura recebida de cada pessoa (diagnóstico e testes)
+    let shake = 0;
 
     // --- TV ---
     const placeholderCanvas = makePlaceholderCanvas('Ninguém está transmitindo', 'Use o botão de tela do painel para mostrar algo aqui');
@@ -128,45 +184,102 @@ export default function Room3D({ onExpandScreen }) {
     videoEl.autoplay = true;
     const videoTex = new THREE.VideoTexture(videoEl);
     videoTex.colorSpace = THREE.SRGBColorSpace;
-    let tvKey = '';
-    const refreshTv = () => {
+    let tvTrackId = '';
+    let tvPlaceholderKey = '';
+    let noVideoSince = 0;
+    let tvSwitches = 0;
+    const refreshTv = (now) => {
       const tv = live.current.tv;
-      const key = `${tv.mode}:${tv.who}:${tv.stream?.id || ''}`;
-      if (key === tvKey) return;
-      tvKey = key;
-      if (tv.mode === 'video' && tv.stream) {
-        videoEl.srcObject = tv.stream;
-        videoEl.muted = false;
-        videoEl.play().catch((err) => logWarn('room3d tv play', err));
-        screenMesh.material.map = videoTex;
-      } else {
+      const track = tv.stream?.getVideoTracks?.()[0];
+      const mat = room.screenMesh.material;
+      if (tv.mode === 'video' && track) {
+        noVideoSince = 0;
+        // Só troca a fonte quando a trilha de vídeo realmente muda.
+        if (track.id !== tvTrackId) {
+          tvTrackId = track.id;
+          tvSwitches += 1;
+          videoEl.srcObject = tv.stream;
+          videoEl.muted = tv.local; // minha própria tela não toca o meu áudio de volta
+          videoEl.play().catch((err) => logWarn('room3d tv play', err));
+        }
+        if (mat.map !== videoTex) {
+          mat.map = videoTex;
+          mat.needsUpdate = true;
+        }
+        return;
+      }
+      // Sem vídeo: mantém o último quadro por um instante antes de mostrar o aviso.
+      if (!noVideoSince) noVideoSince = now;
+      if (tvTrackId && now - noVideoSince < PLACEHOLDER_DELAY) return;
+      const [title, sub] = tv.mode === 'waiting'
+        ? [`Conectando à tela de ${tv.who}…`, 'A transmissão aparece em instantes']
+        : ['Ninguém está transmitindo', 'Use o botão de tela do painel para mostrar algo aqui'];
+      const key = `${title}|${sub}`;
+      if (tvTrackId) {
+        tvTrackId = '';
+        tvSwitches += 1;
         videoEl.srcObject = null;
-        const [title, sub] = tv.mode === 'self'
-          ? ['Você está transmitindo', 'Todos na sala veem a sua tela aqui']
-          : tv.mode === 'waiting'
-            ? [`Conectando à tela de ${tv.who}…`, 'A transmissão aparece em instantes']
-            : ['Ninguém está transmitindo', 'Use o botão de tela do painel para mostrar algo aqui'];
+      }
+      if (key !== tvPlaceholderKey || mat.map !== placeholderTex) {
+        tvPlaceholderKey = key;
         drawPlaceholder(placeholderCanvas, title, sub);
         placeholderTex.needsUpdate = true;
-        screenMesh.material.map = placeholderTex;
+        mat.map = placeholderTex;
+        mat.needsUpdate = true;
       }
-      screenMesh.material.needsUpdate = true;
     };
 
     // --- Jogador local ---
     const spawn = spawnFor(myId);
-    let me = { x: spawn.x, z: spawn.z, yaw: spawn.yaw, seat: -1, moving: false, running: false, emote: null, emoteNonce: 0 };
+    let me = { x: spawn.x, z: spawn.z, y: 0, vy: 0, yaw: spawn.yaw, seat: -1, moving: false, running: false, grounded: true, emote: null, emoteNonce: 0, holding: null, kx: 0, kz: 0 };
     const keys = {};
+    let jumpQueued = false;
+    let stunnedUntil = 0;
     let camYaw = Math.PI;
     let camPitch = 0.42;
     let camDist = 6.2;
     const camTarget = new THREE.Vector3(me.x, 1.3, me.z);
 
-    // --- Avatares ---
-    const avatars = new Map(); // userId -> { avatar, shown: {x,z,yaw}, target, label }
-    const remoteStates = new Map(); // userId -> estado decodificado
-    const reactionLimiter = createRateLimiter(4, 2000);
+    // --- Cena por tema ---
+    const disposeObject = (root) => root.traverse((o) => {
+      if (o.geometry) o.geometry.dispose();
+      if (o.material) {
+        (Array.isArray(o.material) ? o.material : [o.material]).forEach((m) => {
+          if (m.map && m.map !== videoTex && m.map !== placeholderTex) m.map.dispose();
+          m.emissiveMap?.dispose?.();
+          m.dispose();
+        });
+      }
+    });
 
+    const buildObjectMeshes = () => {
+      objMeshes.forEach((mesh) => disposeObject(mesh));
+      objMeshes.clear();
+      THROWABLE_SPAWNS.forEach((s, i) => {
+        const mesh = makeThrowable(theme, i);
+        objMeshes.set(s.id, mesh);
+        room.scene.add(mesh);
+      });
+    };
+
+    const applyTheme = (id) => {
+      theme = themeById(id);
+      const next = buildRoom(theme);
+      const keepTv = room?.screenMesh.material.map;
+      if (room) {
+        avatars.forEach((e) => room.scene.remove(e.avatar.root));
+        objMeshes.forEach((m) => room.scene.remove(m));
+        disposeObject(room.scene);
+      }
+      room = next;
+      avatars.forEach((e) => room.scene.add(e.avatar.root));
+      buildObjectMeshes();
+      if (keepTv === videoTex || keepTv === placeholderTex) room.screenMesh.material.map = keepTv;
+      tvPlaceholderKey = '';
+    };
+    applyTheme(theme.id);
+
+    // --- Avatares e rótulos ---
     const makeLabel = (u) => {
       const el = document.createElement('div');
       el.className = 'room3d-label';
@@ -180,16 +293,16 @@ export default function Room3D({ onExpandScreen }) {
       mic.setAttribute('aria-label', 'microfone desligado');
       el.append(img, name, mic);
       labelsRef.current?.appendChild(el);
-      return { el, name, mic };
+      return { el };
     };
 
     const ensureAvatar = (u) => {
       let entry = avatars.get(u.userId);
       if (!entry) {
         const avatar = new Avatar(u.userId);
-        scene.add(avatar.root);
+        room.scene.add(avatar.root);
         const start = u.userId === myId ? me : spawnFor(u.userId);
-        entry = { avatar, shown: { x: start.x, z: start.z, yaw: start.yaw }, label: makeLabel(u), lastNonce: 0 };
+        entry = { avatar, shown: { x: start.x, z: start.z, y: 0, yaw: start.yaw }, label: makeLabel(u), lastNonce: 0, wasAir: false };
         avatar.root.position.set(start.x, 0, start.z);
         avatars.set(u.userId, entry);
       }
@@ -200,11 +313,15 @@ export default function Room3D({ onExpandScreen }) {
     const removeAvatar = (id) => {
       const entry = avatars.get(id);
       if (!entry) return;
-      scene.remove(entry.avatar.root);
+      room.scene.remove(entry.avatar.root);
       entry.avatar.dispose();
       entry.label.el.remove();
       avatars.delete(id);
       remoteStates.delete(id);
+      // quem saiu larga o que segurava
+      objects.forEach((o, oid) => {
+        if (o.holder === id) objects.set(oid, { ...o, holder: null, vx: 0, vy: 0, vz: 0, moving: true });
+      });
     };
 
     const showReaction = (id, emoji) => {
@@ -215,6 +332,11 @@ export default function Room3D({ onExpandScreen }) {
       b.textContent = emoji;
       entry.label.el.appendChild(b);
       setTimeout(() => b.remove(), 2400);
+    };
+
+    // Som com volume pela distância de quem fez a ação.
+    const soundAt = (id, x, z) => {
+      playAppSound(id, 0.55 * spatialGain(Math.hypot(x - me.x, z - me.z)));
     };
 
     // --- Rede ---
@@ -231,15 +353,103 @@ export default function Room3D({ onExpandScreen }) {
         lastSentAt = now;
       }
     };
-    const offMsg = voice.onRoomMessage((from, raw) => {
+
+    const setLocalHolding = (id) => {
+      me = { ...me, holding: id };
+      setHolding(Boolean(id));
+    };
+
+    const onRemote = (from, raw) => {
       const msg = decode(raw);
       if (!msg) return;
-      if (msg.type === 'state') remoteStates.set(from, msg);
-      else if (msg.type === 'reaction' && reactionLimiter(from)) showReaction(from, msg.emoji);
+      const o = msg.id ? objects.get(msg.id) : null;
+      switch (msg.type) {
+        case 'state':
+          remoteStates.set(from, msg);
+          peakY.set(from, Math.max(peakY.get(from) || 0, msg.y));
+          break;
+        case 'reaction':
+          if (reactionLimiter(from)) showReaction(from, msg.emoji);
+          break;
+        case 'grab': {
+          // vence a versão maior; empate, o menor id (todos decidem igual)
+          const wins = msg.ver > o.ver || (msg.ver === o.ver && String(from) < String(o.holder || '~'));
+          if (!wins) break;
+          if (o.holder === myId) setLocalHolding(null);
+          objects.set(o.id, { ...o, holder: from, ver: msg.ver, moving: false, thrower: null });
+          avatars.get(from)?.avatar.playPick();
+          const s = remoteStates.get(from);
+          if (s) soundAt('room-pick', s.x, s.z);
+          break;
+        }
+        case 'throw':
+        case 'drop':
+          if (msg.ver < o.ver) break;
+          if (o.holder === myId) setLocalHolding(null);
+          objects.set(o.id, { ...o, x: msg.x, y: msg.y, z: msg.z, vx: msg.vx, vy: msg.vy, vz: msg.vz, holder: null, moving: true, ver: msg.ver, thrower: msg.type === 'throw' ? from : null, spent: false });
+          if (msg.type === 'throw') {
+            avatars.get(from)?.avatar.playThrow();
+            soundAt('room-throw', msg.x, msg.z);
+          }
+          break;
+        case 'rest':
+          if (msg.ver === o.ver && !o.holder) objects.set(o.id, { ...o, x: msg.x, y: msg.y, z: msg.z, vx: 0, vy: 0, vz: 0, moving: false, thrower: null });
+          break;
+        case 'hit': {
+          // só vale se quem avisou é quem arremessou aquele objeto
+          if (o.thrower !== from || !hitLimiter(from)) break;
+          objects.set(o.id, bounceOffPerson(o));
+          const target = avatars.get(msg.target);
+          target?.avatar.playHit(msg.dx, msg.dz);
+          if (msg.target === myId) {
+            hitsTaken += 1;
+            stunnedUntil = performance.now() + STUN_SECONDS * 1000;
+            if (me.seat >= 0) me = { ...step(me, { jump: true }, camYaw, 0), emote: me.emote, emoteNonce: me.emoteNonce, holding: me.holding };
+            me = { ...me, kx: msg.dx * KNOCKBACK, kz: msg.dz * KNOCKBACK, vy: Math.max(me.vy, 3) };
+            shake = 0.35;
+            playAppSound('room-hit', 0.7);
+          } else if (target) {
+            soundAt('room-hit', target.shown.x, target.shown.z);
+          }
+          break;
+        }
+        case 'snapshot':
+          msg.list.forEach((e) => {
+            const cur = objects.get(e.id);
+            if (e.ver > cur.ver) {
+              if (cur.holder === myId) setLocalHolding(null);
+              objects.set(e.id, { ...cur, x: e.x, y: e.y, z: e.z, holder: e.holder, ver: e.ver, moving: !e.holder, vx: 0, vy: 0, vz: 0, thrower: null });
+            }
+          });
+          break;
+        case 'theme':
+          if (msg.ts > themeStamp) {
+            themeStamp = msg.ts;
+            localStorage.setItem(themeKey(channelId), JSON.stringify({ id: msg.theme, ts: msg.ts }));
+            setThemeId(msg.theme);
+            applyTheme(msg.theme);
+            playAppSound('room-theme', 0.5);
+          }
+          break;
+        default:
+      }
+    };
+    const offMsg = voice.onRoomMessage(onRemote);
+    const offOpen = voice.onRoomPeerOpen((id) => {
+      voice.sendRoomMessage(encodeState(me), id);
+      voice.sendRoomMessage(encodeSnapshot(objects), id);
+      if (themeStamp > 0) voice.sendRoomMessage(encodeTheme(theme.id, themeStamp), id);
     });
-    const offOpen = voice.onRoomPeerOpen((id) => voice.sendRoomMessage(encodeState(me), id));
 
-    // --- Comandos vindos dos botões ---
+    // --- Comandos (teclado, botões e testes) ---
+    const occupiedSeats = () => {
+      const set = new Set();
+      remoteStates.forEach((s) => { if (s.seat >= 0) set.add(s.seat); });
+      return set;
+    };
+    const standUp = () => {
+      if (me.seat >= 0) me = { ...step(me, { jump: true }, camYaw, 0), emote: me.emote, emoteNonce: me.emoteNonce, holding: me.holding };
+    };
     commandsRef.current.emote = (name) => {
       if (me.seat >= 0) return;
       me = { ...me, emote: name, emoteNonce: me.emoteNonce + 1 };
@@ -250,20 +460,59 @@ export default function Room3D({ onExpandScreen }) {
       showReaction(myId, emoji);
       voice.sendRoomMessage(encodeReaction(emoji));
     };
-    const occupiedSeats = () => {
-      const set = new Set();
-      remoteStates.forEach((s) => { if (s.seat >= 0) set.add(s.seat); });
-      return set;
-    };
     commandsRef.current.toggleSit = () => {
       if (me.seat >= 0) {
-        me = step(me, { forward: true }, 0, 0); // levanta pelo ponto de saída
+        standUp();
         me.moving = false;
       } else {
         const seat = nearestSeat(me.x, me.z, occupiedSeats());
         if (seat >= 0) me = sitAt(me, seat);
       }
       sendState(true);
+    };
+    commandsRef.current.jump = () => { jumpQueued = true; };
+    commandsRef.current.grabOrDrop = () => {
+      if (me.holding) {
+        const o = objects.get(me.holding);
+        const m = dropFrom(me);
+        const ver = o.ver + 1;
+        objects.set(o.id, { ...o, ...m, holder: null, moving: true, ver, thrower: null });
+        voice.sendRoomMessage(encodeDrop(o.id, ver, m));
+        setLocalHolding(null);
+        sendState(true);
+        return;
+      }
+      const target = nearestPickable(me, objects);
+      if (!target) return;
+      const ver = target.ver + 1;
+      objects.set(target.id, { ...target, holder: myId, ver, moving: false, thrower: null });
+      setLocalHolding(target.id);
+      avatars.get(myId)?.avatar.playPick();
+      playAppSound('room-pick', 0.5);
+      voice.sendRoomMessage(encodeGrab(target.id, ver));
+      sendState(true);
+    };
+    commandsRef.current.throw = (aimYaw = camYaw) => {
+      if (!me.holding) return;
+      const o = objects.get(me.holding);
+      standUp();
+      me = { ...me, yaw: aimYaw };
+      const m = throwFrom(me, aimYaw);
+      const ver = o.ver + 1;
+      objects.set(o.id, { ...o, ...m, holder: null, moving: true, ver, thrower: myId, spent: false });
+      voice.sendRoomMessage(encodeThrow(o.id, ver, m));
+      setLocalHolding(null);
+      avatars.get(myId)?.avatar.playThrow();
+      playAppSound('room-throw', 0.6);
+      sendState(true);
+    };
+    commandsRef.current.setTheme = (id) => {
+      themeStamp = Date.now();
+      localStorage.setItem(themeKey(channelId), JSON.stringify({ id, ts: themeStamp }));
+      setThemeId(id);
+      applyTheme(id);
+      voice.sendRoomMessage(encodeTheme(id, themeStamp));
+      playAppSound('room-theme', 0.5);
     };
 
     // --- Entrada ---
@@ -272,8 +521,15 @@ export default function Room3D({ onExpandScreen }) {
       if (KEYMAP[e.code]) {
         keys[KEYMAP[e.code]] = true;
         if (e.code.startsWith('Arrow')) e.preventDefault();
+      } else if (e.code === 'Space') {
+        e.preventDefault();
+        if (!e.repeat) jumpQueued = true;
       } else if (e.code === 'KeyE' && !e.repeat) {
         commandsRef.current.toggleSit();
+      } else if (e.code === 'KeyF' && !e.repeat) {
+        commandsRef.current.grabOrDrop();
+      } else if (e.code === 'KeyG' && !e.repeat) {
+        commandsRef.current.throw();
       } else if (EMOTE_KEYS[e.code] && !e.repeat) {
         commandsRef.current.emote(EMOTE_KEYS[e.code]);
       }
@@ -286,10 +542,11 @@ export default function Room3D({ onExpandScreen }) {
     window.addEventListener('keyup', onKeyUp);
     window.addEventListener('blur', clearKeys);
 
+    // Arrastar gira a câmera; um clique curto arremessa o que estiver na mão.
     let dragging = null;
     const canvas = renderer.domElement;
     const onPointerDown = (e) => {
-      dragging = { x: e.clientX, y: e.clientY };
+      dragging = { x: e.clientX, y: e.clientY, startX: e.clientX, startY: e.clientY, at: performance.now() };
       canvas.setPointerCapture(e.pointerId);
       if (document.activeElement && isEditable(document.activeElement)) document.activeElement.blur();
     };
@@ -297,13 +554,29 @@ export default function Room3D({ onExpandScreen }) {
       if (!dragging) return;
       camYaw -= (e.clientX - dragging.x) * 0.006;
       camPitch = Math.max(0.12, Math.min(1.25, camPitch + (e.clientY - dragging.y) * 0.004));
-      dragging = { x: e.clientX, y: e.clientY };
+      dragging.x = e.clientX;
+      dragging.y = e.clientY;
     };
-    const onPointerUp = () => { dragging = null; };
+    const onPointerUp = (e) => {
+      if (dragging && e.button === 0) {
+        const moved = Math.hypot(e.clientX - dragging.startX, e.clientY - dragging.startY);
+        if (moved < 6 && performance.now() - dragging.at < 350 && me.holding) commandsRef.current.throw();
+      }
+      dragging = null;
+    };
     const onWheel = (e) => {
       e.preventDefault();
       camDist = Math.max(3, Math.min(11, camDist + e.deltaY * 0.004));
     };
+    // Se a placa de vídeo perder o contexto WebGL (driver, memória), a cena é
+    // reconstruída quando ele voltar, em vez de a sala ficar em branco.
+    const onContextLost = (e) => {
+      e.preventDefault();
+      logWarn('room3d webgl', new Error('contexto WebGL perdido'));
+    };
+    const onContextRestored = () => applyTheme(theme.id);
+    canvas.addEventListener('webglcontextlost', onContextLost);
+    canvas.addEventListener('webglcontextrestored', onContextRestored);
     canvas.addEventListener('pointerdown', onPointerDown);
     canvas.addEventListener('pointermove', onPointerMove);
     canvas.addEventListener('pointerup', onPointerUp);
@@ -323,27 +596,90 @@ export default function Room3D({ onExpandScreen }) {
     // --- Laço ---
     const clock = new THREE.Clock();
     const projected = new THREE.Vector3();
+    const hand = new THREE.Vector3();
+    const camGoal = new THREE.Vector3();
     let lastSpatial = 0;
     let lastHint = '';
     const frame = () => {
-      // Quadros longos (máquina lenta) viram vários passos curtos: o movimento
-      // continua fiel ao tempo real até ~4 FPS, sem atravessar móveis.
+      // Quadros longos (máquina lenta) viram vários passos curtos.
       const dt = Math.min(clock.getDelta(), 0.25);
+      const now = performance.now();
       const users = live.current.voiceUsers || [];
       const present = new Set(users.map((u) => u.userId));
       users.forEach(ensureAvatar);
       Array.from(avatars.keys()).forEach((id) => { if (!present.has(id)) removeAvatar(id); });
 
       // jogador local
+      const stunned = now < stunnedUntil;
       const before = me;
       const steps = Math.max(1, Math.ceil(dt / 0.05));
-      for (let i = 0; i < steps; i++) me = { ...step(me, keys, camYaw, dt / steps), emote: me.emote, emoteNonce: me.emoteNonce };
+      let landed = false;
+      for (let i = 0; i < steps; i++) {
+        const k = { ...keys, jump: jumpQueued && i === 0 };
+        me = { ...step(me, k, camYaw, dt / steps, { gravityScale: theme.gravity, frozen: stunned }), emote: me.emote, emoteNonce: me.emoteNonce, holding: me.holding };
+        landed = landed || me.landed;
+      }
+      if (jumpQueued && before.grounded && !me.grounded && before.seat < 0) playAppSound('room-jump', 0.45);
+      jumpQueued = false;
+      if (landed) {
+        avatars.get(myId)?.avatar.playLand();
+        playAppSound('room-land', 0.4);
+      }
       if (me.moving && before.emote) me.emote = null;
       sendState();
 
+      // objetos: física local, acertos de quem arremessou, mãos de quem segura
+      const people = [];
+      avatars.forEach((e, id) => people.push({ id, x: e.shown.x, y: e.shown.y, z: e.shown.z }));
+      const holders = new Set();
+      objects.forEach((o, id) => {
+        if (o.holder) {
+          holders.add(o.holder);
+          const holderEntry = avatars.get(o.holder);
+          if (holderEntry) {
+            holderEntry.avatar.handWorld(hand);
+            objects.set(id, { ...o, x: hand.x, y: hand.y, z: hand.z });
+          }
+          return;
+        }
+        if (!o.moving) return;
+        let next;
+        if (o.thrower === myId) {
+          const res = advanceThrown(o, dt, theme.gravity, people, myId);
+          next = res.obj;
+          const target = res.hit;
+          if (target) {
+            const len = Math.hypot(next.vx, next.vz) || 1;
+            const dx = next.vx / len;
+            const dz = next.vz / len;
+            voice.sendRoomMessage(encodeHit(target, id, dx, dz));
+            avatars.get(target)?.avatar.playHit(dx, dz);
+            soundAt('room-hit', next.x, next.z);
+            next = bounceOffPerson(next);
+          }
+          if (!next.moving) voice.sendRoomMessage(encodeRest(id, next.ver, next));
+        } else {
+          next = stepObject(o, dt, theme.gravity);
+        }
+        if (!next.moving) next = { ...next, thrower: null };
+        objects.set(id, next);
+      });
+      objects.forEach((o, id) => {
+        const mesh = objMeshes.get(id);
+        if (!mesh) return;
+        mesh.position.set(o.x, o.y, o.z);
+        if (o.moving) {
+          mesh.rotation.x += o.vz * dt * 3;
+          mesh.rotation.z -= o.vx * dt * 3;
+          mesh.rotation.y += speedOf(o) * dt * 0.5;
+        }
+      });
+
       // dica contextual
       let nextHint = '';
-      if (me.seat >= 0) nextHint = 'E para levantar';
+      if (me.holding) nextHint = 'G ou clique para arremessar · F para soltar';
+      else if (me.seat >= 0) nextHint = 'E para levantar';
+      else if (nearestPickable(me, objects)) nextHint = 'F para pegar';
       else if (nearestSeat(me.x, me.z, occupiedSeats()) >= 0) nextHint = 'E para sentar';
       if (nextHint !== lastHint) {
         lastHint = nextHint;
@@ -356,11 +692,14 @@ export default function Room3D({ onExpandScreen }) {
         const isMe = id === myId;
         const s = isMe ? me : remoteStates.get(id);
         const target = s || entry.shown;
+        const ty = target.y || 0;
         if (Math.hypot(target.x - entry.shown.x, target.z - entry.shown.z) > 4) {
-          entry.shown = { x: target.x, z: target.z, yaw: target.yaw };
+          entry.shown = { x: target.x, z: target.z, y: ty, yaw: target.yaw };
         } else {
-          entry.shown.x += (target.x - entry.shown.x) * (isMe ? 1 : t);
-          entry.shown.z += (target.z - entry.shown.z) * (isMe ? 1 : t);
+          const k = isMe ? 1 : t;
+          entry.shown.x += (target.x - entry.shown.x) * k;
+          entry.shown.z += (target.z - entry.shown.z) * k;
+          entry.shown.y += (ty - entry.shown.y) * (isMe ? 1 : Math.min(1, t * 1.6));
           entry.shown.yaw = lerpAngle(entry.shown.yaw, target.yaw ?? entry.shown.yaw, isMe ? Math.min(1, dt * 14) : t);
         }
         if (s && !isMe && s.emote && s.emoteNonce !== entry.lastNonce) {
@@ -368,18 +707,26 @@ export default function Room3D({ onExpandScreen }) {
           entry.avatar.playEmote(s.emote);
         }
         const seat = s?.seat ?? -1;
-        entry.avatar.root.position.set(entry.shown.x, 0, entry.shown.z);
+        const ground = groundAt(entry.shown.x, entry.shown.z, entry.shown.y);
+        const airborne = seat < 0 && entry.shown.y > ground + 0.06;
+        if (!isMe) {
+          if (airborne && !entry.wasAir && s && s.y > ground + 0.2) soundAt('room-jump', entry.shown.x, entry.shown.z);
+          if (!airborne && entry.wasAir) entry.avatar.playLand();
+        }
+        entry.wasAir = airborne;
+        entry.avatar.root.position.set(entry.shown.x, seat >= 0 ? 0 : entry.shown.y, entry.shown.z);
         entry.avatar.root.rotation.y = entry.shown.yaw;
         entry.avatar.update(dt, {
           moving: Boolean(s?.moving),
           running: Boolean(s?.running),
           seat,
           high: seat >= 0 && Boolean(SEATS[seat]?.high),
-          speaking: Boolean(entry.user?.isSpeaking)
+          speaking: Boolean(entry.user?.isSpeaking),
+          airborne,
+          holding: holders.has(id)
         });
 
-        // rótulo
-        const headY = seat >= 0 ? (SEATS[seat]?.high ? 2.15 : 1.75) : 2.15;
+        const headY = seat >= 0 ? (SEATS[seat]?.high ? 2.15 : 1.75) : 2.15 + entry.shown.y;
         projected.set(entry.shown.x, headY, entry.shown.z).project(camera);
         const visible = projected.z < 1 && Math.abs(projected.x) < 1.1 && Math.abs(projected.y) < 1.1;
         const el = entry.label.el;
@@ -393,7 +740,6 @@ export default function Room3D({ onExpandScreen }) {
       });
 
       // áudio espacial
-      const now = performance.now();
       if (live.current.spatialOn && now - lastSpatial > SPATIAL_INTERVAL) {
         lastSpatial = now;
         const positions = new Map();
@@ -401,19 +747,28 @@ export default function Room3D({ onExpandScreen }) {
         voice.updateSpatialPositions({ x: me.x, z: me.z, yaw: camYaw }, positions);
       }
 
-      // câmera em terceira pessoa
-      camTarget.lerp(new THREE.Vector3(me.x, me.seat >= 0 ? 1.1 : 1.3, me.z), Math.min(1, dt * 8));
+      // câmera em terceira pessoa (com tremida ao levar um golpe)
+      camGoal.set(me.x, me.seat >= 0 ? 1.1 : 1.3 + me.y, me.z);
+      camTarget.lerp(camGoal, Math.min(1, dt * 8));
       const horiz = Math.cos(camPitch) * camDist;
+      shake = Math.max(0, shake - dt);
+      const sx = shake > 0 ? (Math.random() - 0.5) * shake * 0.6 : 0;
+      const sy = shake > 0 ? (Math.random() - 0.5) * shake * 0.6 : 0;
       camera.position.set(
-        camTarget.x - Math.sin(camYaw) * horiz,
-        camTarget.y + Math.sin(camPitch) * camDist,
+        camTarget.x - Math.sin(camYaw) * horiz + sx,
+        camTarget.y + Math.sin(camPitch) * camDist + sy,
         camTarget.z - Math.cos(camYaw) * horiz
       );
       camera.lookAt(camTarget);
 
-      refreshTv();
-      updateScene(dt);
-      renderer.render(scene, camera);
+      try {
+        refreshTv(now);
+        room.update(dt);
+        renderer.render(room.scene, camera);
+      } catch (err) {
+        if (!renderError) logWarn('room3d render', err);
+        renderError = String(err?.message || err);
+      }
     };
     renderer.setAnimationLoop(frame);
 
@@ -423,12 +778,34 @@ export default function Room3D({ onExpandScreen }) {
       remote: () => Object.fromEntries(remoteStates),
       avatars: () => Array.from(avatars.keys()),
       tvMode: () => live.current.tv.mode,
+      tvLocal: () => live.current.tv.local,
+      tvSwitches: () => tvSwitches,
       press: (k, down) => { keys[k] = down; },
       setCamYaw: (y) => { camYaw = y; },
-      teleport: (x, z) => { me = { ...me, ...resolve(x, z), seat: -1 }; sendState(true); },
+      teleport: (x, z) => {
+        const p = resolve(x, z);
+        me = { ...me, ...p, y: groundAt(p.x, p.z, 10), vy: 0, seat: -1 };
+        sendState(true);
+      },
       sit: () => commandsRef.current.toggleSit(),
       emote: (name) => commandsRef.current.emote(name),
-      react: (emoji) => commandsRef.current.react(emoji)
+      react: (emoji) => commandsRef.current.react(emoji),
+      jump: () => commandsRef.current.jump(),
+      grab: () => commandsRef.current.grabOrDrop(),
+      throwAt: (x, z) => commandsRef.current.throw(Math.atan2(x - me.x, z - me.z)),
+      objects: () => Object.fromEntries(Array.from(objects.entries()).map(([id, o]) => [id, { x: o.x, y: o.y, z: o.z, holder: o.holder, moving: o.moving, ver: o.ver }])),
+      hitsTaken: () => hitsTaken,
+      peakY: (id) => peakY.get(id) || 0,
+      gl: () => ({
+        lost: renderer.getContext().isContextLost(),
+        calls: renderer.info.render.calls,
+        triangles: renderer.info.render.triangles,
+        sceneChildren: room.scene.children.length,
+        error: renderError
+      }),
+      resetPeakY: () => peakY.clear(),
+      theme: () => theme.id,
+      setTheme: (id) => commandsRef.current.setTheme(id)
     };
 
     return () => {
@@ -440,29 +817,23 @@ export default function Room3D({ onExpandScreen }) {
       window.removeEventListener('keydown', onKeyDown);
       window.removeEventListener('keyup', onKeyUp);
       window.removeEventListener('blur', clearKeys);
+      canvas.removeEventListener('webglcontextlost', onContextLost);
+      canvas.removeEventListener('webglcontextrestored', onContextRestored);
       canvas.removeEventListener('pointerdown', onPointerDown);
       canvas.removeEventListener('pointermove', onPointerMove);
       canvas.removeEventListener('pointerup', onPointerUp);
       canvas.removeEventListener('wheel', onWheel);
       Array.from(avatars.keys()).forEach(removeAvatar);
       videoEl.srcObject = null;
+      disposeObject(room.scene);
       videoTex.dispose();
       placeholderTex.dispose();
-      scene.traverse((o) => {
-        if (o.geometry) o.geometry.dispose();
-        if (o.material) {
-          (Array.isArray(o.material) ? o.material : [o.material]).forEach((m) => {
-            m.map?.dispose?.();
-            m.dispose();
-          });
-        }
-      });
       renderer.dispose();
       canvas.remove();
     };
-    // A cena é criada uma vez por entrada na sala; o resto chega por `live`.
+    // A cena é criada uma vez por entrada na sala; o resto chega por `live` e comandos.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [failed, myId]);
+  }, [failed, myId, channelId]);
 
   if (failed) {
     return (
@@ -474,6 +845,9 @@ export default function Room3D({ onExpandScreen }) {
     );
   }
 
+  const currentTheme = themeById(themeId);
+  const showingOwn = Boolean(share.showingLocal && share.displayedStream);
+
   return (
     <div className="room3d" ref={mountRef}>
       <div className="room3d-labels" ref={labelsRef} />
@@ -481,7 +855,10 @@ export default function Room3D({ onExpandScreen }) {
         <div className="room3d-help">
           <span><kbd>WASD</kbd> andar</span>
           <span><kbd>Shift</kbd> correr</span>
+          <span><kbd>Espaço</kbd> pular</span>
           <span><kbd>E</kbd> sentar</span>
+          <span><kbd>F</kbd> pegar/soltar</span>
+          <span><kbd>G</kbd> ou clique: arremessar</span>
           <span><kbd>1</kbd><kbd>2</kbd><kbd>3</kbd> gestos</span>
           <span>arraste para girar · roda para zoom</span>
           <button className="room3d-help-close" onClick={() => setHelpOpen(false)} aria-label="Fechar atalhos"><X size={13} /></button>
@@ -493,6 +870,33 @@ export default function Room3D({ onExpandScreen }) {
       )}
       {hint && <div className="room3d-hint">{hint}</div>}
       <div className="room3d-top-right">
+        <div className="room3d-theme">
+          <button className="room3d-chip" onClick={() => setThemeMenu((v) => !v)} aria-expanded={themeMenu} title="Trocar o tema da sala para todos">
+            <Palette size={14} /> {currentTheme.name}
+          </button>
+          {themeMenu && (
+            <div className="room3d-theme-menu" role="menu">
+              {THEMES.map((t) => (
+                <button
+                  key={t.id}
+                  role="menuitemradio"
+                  aria-checked={t.id === themeId}
+                  className={t.id === themeId ? 'active' : ''}
+                  onClick={() => {
+                    commandsRef.current.setTheme?.(t.id);
+                    setThemeMenu(false);
+                  }}
+                >
+                  <span className="room3d-swatch">{t.swatch.map((c) => <i key={c} style={{ background: c }} />)}</span>
+                  <span className="room3d-theme-name">{t.name}</span>
+                  {t.gravity < 1 && <em>gravidade baixa</em>}
+                  {t.id === themeId && <Check size={14} />}
+                </button>
+              ))}
+              <div className="room3d-theme-note">O tema muda para todos na sala.</div>
+            </div>
+          )}
+        </div>
         <button
           className={`room3d-chip ${spatialOn ? 'on' : ''}`}
           onClick={() => setSpatialOn((v) => !v)}
@@ -506,14 +910,19 @@ export default function Room3D({ onExpandScreen }) {
           </button>
         )}
       </div>
-      {otherPresenters.length > 1 && (
+      {(otherPresenters.length > 1 || (share.isScreenSharing && otherPresenters.length > 0)) && (
         <div className="room3d-presenters" role="tablist" aria-label="O que passa na TV">
+          {share.isScreenSharing && (
+            <button role="tab" aria-selected={share.showingLocal} className={share.showingLocal ? 'active' : ''} onClick={share.showOwnStream}>
+              Sua tela
+            </button>
+          )}
           {otherPresenters.map((p) => (
             <button
               key={p.userId}
               role="tab"
-              aria-selected={share.watching?.userId === p.userId}
-              className={share.watching?.userId === p.userId ? 'active' : ''}
+              aria-selected={!share.showingLocal && share.watching?.userId === p.userId}
+              className={!share.showingLocal && share.watching?.userId === p.userId ? 'active' : ''}
               onClick={() => share.watchStream(p, voice.activeVoiceChannel)}
             >
               <span className="live-dot" /> {p.username}
@@ -521,10 +930,16 @@ export default function Room3D({ onExpandScreen }) {
           ))}
         </div>
       )}
+      {showingOwn && (
+        <div className="room3d-own-note">
+          Sua tela está na TV. Para evitar o efeito espelho, transmita uma janela em vez da tela inteira.
+        </div>
+      )}
       <div className="room3d-actions">
         <button onClick={() => commandsRef.current.emote?.('wave')} title="Acenar (1)"><Hand size={15} /> Acenar</button>
         <button onClick={() => commandsRef.current.emote?.('dance')} title="Dançar (2)"><Music size={15} /> Dançar</button>
         <button onClick={() => commandsRef.current.emote?.('cheer')} title="Comemorar (3)"><PartyPopper size={15} /> Comemorar</button>
+        {holding && <button className="room3d-throw" onClick={() => commandsRef.current.throw?.()} title="Arremessar (G ou clique)">Arremessar</button>}
         <span className="room3d-sep" />
         {REACTIONS.map((r) => (
           <button key={r} className="room3d-emoji" onClick={() => commandsRef.current.react?.(r)} title="Reagir">{r}</button>

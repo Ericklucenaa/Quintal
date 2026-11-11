@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { Radio, Mic, Keyboard } from 'lucide-react';
 import { useSettings } from '../../services/settings';
 import { requestNotificationPermission } from '../../services/notificationService';
+import { appSoundsEnabled, setAppSoundsEnabled, playAppSound } from '../../services/soundEffects';
 
 const isElectron = typeof window !== 'undefined' && Boolean(window.electronAPI?.isElectron);
 
@@ -140,6 +141,7 @@ export function AppSettingsPanel() {
           onChange={(v) => update({ notificationSounds: v })}
           title="Som de notificação"
         />
+        <AppSoundsToggle />
         <div className="hint">No status "Não perturbe" nenhuma notificação é exibida.</div>
       </div>
 
@@ -189,5 +191,22 @@ export function AppSettingsPanel() {
         </div>
       </div>
     </div>
+  );
+}
+
+/** Sons de entrar e sair da chamada, de transmissão e da sala 3D. */
+function AppSoundsToggle() {
+  const [on, setOn] = useState(appSoundsEnabled);
+  return (
+    <Toggle
+      checked={on}
+      onChange={(v) => {
+        setAppSoundsEnabled(v);
+        setOn(v);
+        if (v) playAppSound('voice-user-join');
+      }}
+      title="Sons da chamada"
+      description="Avisos sonoros diferentes quando alguém entra, sai ou começa e para de transmitir a tela, e os sons da sala 3D."
+    />
   );
 }
