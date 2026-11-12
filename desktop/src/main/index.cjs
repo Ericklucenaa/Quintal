@@ -626,8 +626,8 @@ ipcMain.handle('link:preview', async (_event, url) => {
 // SHA-256 published in the update manifest, then run the installer.
 // ---------------------------------------------------------------------------
 
-// O repositório passou a se chamar Quintal; o antigo endereço Concord continua como
-// espelho dos instaladores (as versões antigas do app só aceitam esse caminho).
+// O repositório passou a se chamar Quintal; o caminho antigo (Concord) continua aceito
+// porque o GitHub redireciona os links do nome antigo para o novo.
 const RELEASE_PATH = /^\/Ericklucenaa\/(Quintal|Concord)\/releases\/download\/v\d+\.\d+\.\d+\/[\w.-]+\.exe$/;
 const OFFICIAL_RELEASES_PAGE = 'https://github.com/Ericklucenaa/Quintal/releases/latest';
 

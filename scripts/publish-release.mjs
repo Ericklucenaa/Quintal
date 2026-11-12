@@ -1,6 +1,8 @@
 // Publishes a built desktop release:
-//   1. uploads the installers to a GitHub release (gh CLI) in the Quintal repo and in the
-//      Concord mirror (apps up to 1.2.x only download from github.com/Ericklucenaa/Concord),
+//   1. uploads the installers to a GitHub release (gh CLI) in the Quintal repo.
+//      Apps up to 1.2.x only auto-download from .../Concord; they refuse this URL and open
+//      github.com/Ericklucenaa/Concord/releases/latest, which GitHub redirects to Quintal
+//      (so no repository may ever be named "Concord" again in this account).
 //   2. writes the update manifest (with the installer's SHA-256) to Firestore
 //      using admin credentials — clients can only read it,
 //   3. writes version.json for the hosted web app.
@@ -23,8 +25,6 @@ const notes = process.argv.slice(2).find((a) => !a.startsWith('--')) || `Quintal
 const mandatory = process.argv.includes('--mandatory');
 const manifestOnly = process.argv.includes('--manifest-only');
 const repo = 'Ericklucenaa/Quintal';
-// Espelho com o nome antigo: o atualizador das versões até 1.2.x só aceita este caminho.
-const legacyRepo = 'Ericklucenaa/Concord';
 const tag = `v${version}`;
 
 const setupName = `Quintal-Setup-${version}.exe`;
@@ -58,17 +58,13 @@ function publishTo(targetRepo, extraNote = '') {
   console.log(`GitHub release ${tag} published in ${targetRepo}.`);
 }
 
-if (!manifestOnly) {
-  publishTo(repo);
-  publishTo(legacyRepo, 'Espelho para atualizar instalações antigas do Concord. O projeto agora está em https://github.com/Ericklucenaa/Quintal');
-}
+if (!manifestOnly) publishTo(repo);
 
 const manifest = {
   version,
   name: `Quintal ${tag}`,
   releaseDate: new Date().toISOString().slice(0, 10),
-  // Pelo espelho: funciona nas versões antigas (que só aceitam Concord) e nas novas (aceitam os dois).
-  downloadUrl: `https://github.com/${legacyRepo}/releases/download/${tag}/${setupName}`,
+  downloadUrl: `https://github.com/${repo}/releases/download/${tag}/${setupName}`,
   sha256,
   webUrl: 'https://concord-3af70.web.app',
   releaseNotes: notes,

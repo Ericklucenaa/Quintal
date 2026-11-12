@@ -1,10 +1,10 @@
 {
-  "version": "1.2.3",
-  "name": "Concord v1.2.3",
-  "releaseDate": "2026-10-28",
-  "downloadUrl": "https://github.com/Ericklucenaa/Concord/releases/download/v1.2.3/Concord-Setup-1.2.3.exe",
-  "sha256": "a460d816eaf7526c55b4dddee8f29461cec51f7d6b2da2f46ebb36088e89688e",
+  "version": "1.3.0",
+  "name": "Quintal v1.3.0",
+  "releaseDate": "2026-11-12",
+  "downloadUrl": "https://github.com/Ericklucenaa/Quintal/releases/download/v1.3.0/Quintal-Setup-1.3.0.exe",
+  "sha256": "8e3d7b016186d59048dfe08c9cca123c268b8078e75d138c598f4397d0dccfad",
   "webUrl": "https://concord-3af70.web.app",
-  "releaseNotes": "v1.2.3: corrige a voz (ninguém se ouvia), permite transmitir e assistir ao mesmo tempo, menus de botão direito, temas, fundo no chat e 70 sons",
+  "releaseNotes": "O Concord agora se chama Quintal: sala 3D com avatares personalizáveis, temas, interações, sons e um visual novo.",
   "isMandatory": true
 }

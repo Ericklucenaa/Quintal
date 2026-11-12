@@ -65,7 +65,7 @@ O app se chama Quintal, mas alguns identificadores continuam com o nome antigo p
 | Coleções do Firestore e chaves locais (`concord_*`) | Renomear apagaria dados e preferências de todos |
 | `appId` do instalador (`com.concord.app`) | A versão nova atualiza a instalada em vez de criar um segundo app |
 | Pasta de dados do Electron (`%APPDATA%\Concord`) | O app instalado continua usando a pasta existente: ninguém perde o login |
-| Espelho `Ericklucenaa/Concord` | O projeto está em `Ericklucenaa/Quintal`, mas o atualizador das versões até 1.2.x só aceita downloads de `Ericklucenaa/Concord`; por isso cada release também é publicada nesse espelho |
+| Nome `Concord` no GitHub | O repositório agora é `Ericklucenaa/Quintal`. As versões até 1.2.x recusam o download automático do endereço novo e abrem `github.com/Ericklucenaa/Concord/releases/latest`, que o GitHub redireciona para o Quintal; por isso **nenhum repositório pode voltar a se chamar Concord** nesta conta |
 | Links `concord://` | Continuam funcionando; os novos usam `quintal://` |
 
 ## Desenvolvimento
