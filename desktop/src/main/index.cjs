@@ -626,8 +626,10 @@ ipcMain.handle('link:preview', async (_event, url) => {
 // SHA-256 published in the update manifest, then run the installer.
 // ---------------------------------------------------------------------------
 
-const RELEASE_PATH = /^\/Ericklucenaa\/Concord\/releases\/download\/v\d+\.\d+\.\d+\/[\w.-]+\.exe$/;
-const OFFICIAL_RELEASES_PAGE = 'https://github.com/Ericklucenaa/Concord/releases/latest';
+// O repositório passou a se chamar Quintal; o antigo endereço Concord continua como
+// espelho dos instaladores (as versões antigas do app só aceitam esse caminho).
+const RELEASE_PATH = /^\/Ericklucenaa\/(Quintal|Concord)\/releases\/download\/v\d+\.\d+\.\d+\/[\w.-]+\.exe$/;
+const OFFICIAL_RELEASES_PAGE = 'https://github.com/Ericklucenaa/Quintal/releases/latest';
 
 function isOfficialReleaseUrl(url) {
   try {
@@ -699,7 +701,7 @@ ipcMain.handle('updater:download-and-install', async (_event, { downloadUrl, ver
       throw new Error('O manifesto de atualização não traz a assinatura SHA-256.');
     }
 
-    const target = downloadUrl || `https://github.com/Ericklucenaa/Concord/releases/download/v${safeVersion}/Quintal-Setup-${safeVersion}.exe`;
+    const target = downloadUrl || `https://github.com/Ericklucenaa/Quintal/releases/download/v${safeVersion}/Quintal-Setup-${safeVersion}.exe`;
     if (!isOfficialReleaseUrl(target)) throw new Error('URL de atualização não confiável foi bloqueada.');
 
     const dest = path.join(app.getPath('temp'), `Quintal-Setup-${safeVersion}.exe`);

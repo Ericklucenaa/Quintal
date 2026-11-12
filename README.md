@@ -5,7 +5,7 @@
 Aplicativo de comunicação para Windows (e web) com chat de texto em tempo real, mensagens diretas, salas de voz e transmissão de tela.
 
 - **Web:** https://concord-3af70.web.app
-- **Instalador Windows:** [Releases](https://github.com/Ericklucenaa/Concord/releases/latest)
+- **Instalador Windows:** [Releases](https://github.com/Ericklucenaa/Quintal/releases/latest)
 
 ## Funcionalidades
 
@@ -65,7 +65,7 @@ O app se chama Quintal, mas alguns identificadores continuam com o nome antigo p
 | Coleções do Firestore e chaves locais (`concord_*`) | Renomear apagaria dados e preferências de todos |
 | `appId` do instalador (`com.concord.app`) | A versão nova atualiza a instalada em vez de criar um segundo app |
 | Pasta de dados do Electron (`%APPDATA%\Concord`) | O app instalado continua usando a pasta existente: ninguém perde o login |
-| Repositório `Ericklucenaa/Concord` | O atualizador das versões já instaladas só aceita downloads desse repositório |
+| Espelho `Ericklucenaa/Concord` | O projeto está em `Ericklucenaa/Quintal`, mas o atualizador das versões até 1.2.x só aceita downloads de `Ericklucenaa/Concord`; por isso cada release também é publicada nesse espelho |
 | Links `concord://` | Continuam funcionando; os novos usam `quintal://` |
 
 ## Desenvolvimento

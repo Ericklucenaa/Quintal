@@ -94,7 +94,7 @@ function UpdateNotifier() {
           setTimeout(() => setIsOpen(false), 2000);
         }
       } else {
-        const targetUrl = updateInfo?.downloadUrl || 'https://github.com/Ericklucenaa/Concord/releases/latest';
+        const targetUrl = updateInfo?.downloadUrl || 'https://github.com/Ericklucenaa/Quintal/releases/latest';
         if (window.electronAPI?.openExternal) {
           window.electronAPI.openExternal(targetUrl);
         } else {
@@ -105,7 +105,7 @@ function UpdateNotifier() {
     } catch (err) {
       console.error('Update error:', err);
       setStatusText('Erro ao atualizar automaticamente. Abrindo página de download...');
-      const targetUrl = updateInfo?.downloadUrl || 'https://github.com/Ericklucenaa/Concord/releases/latest';
+      const targetUrl = updateInfo?.downloadUrl || 'https://github.com/Ericklucenaa/Quintal/releases/latest';
       if (window.electronAPI?.openExternal) {
         window.electronAPI.openExternal(targetUrl);
       }
