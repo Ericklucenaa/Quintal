@@ -166,6 +166,9 @@ export default function VoiceRoomArea({ embedded = false }) {
   const otherPresenters = presenters.filter((p) => p.userId !== user?.id);
   const canModerate = isModerator(voiceServer, user?.id);
 
+  // O <video> do palco é recriado quando se volta da sala 3D ou quando a transmissão
+  // aparece; por isso a ligação também roda quando muda o modo de exibição (antes,
+  // ao sair do 3D, o vídeo novo ficava sem fonte e a transmissão aparecia preta).
   useEffect(() => {
     const videoEl = videoRef.current;
     if (!videoEl) return;
@@ -176,7 +179,7 @@ export default function VoiceRoomArea({ embedded = false }) {
     } else {
       videoEl.srcObject = null;
     }
-  }, [displayedStream, streamReady]);
+  }, [displayedStream, streamReady, show3d, hasActiveStream]);
 
   useEffect(() => {
     const onChange = () => setIsFullscreen(Boolean(document.fullscreenElement));

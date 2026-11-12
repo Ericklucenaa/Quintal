@@ -1,69 +1,72 @@
 /* ==========================================================================
    Quintal design system
-   Floating panels on a deep canvas, violet→blue accent, Inter typography.
+   "Quintal ao entardecer": neutros quentes de carvão, destaque terracota (a cor
+   do logo), verde-folha para presença e sucesso. Colunas encostadas e separadas
+   por linhas finas; sem degradês, brilhos ou efeito de vidro. Tipografia Figtree.
    ========================================================================== */
 
 :root {
-  /* Surfaces */
-  --bg-app: #0b0c12;
-  --bg-primary: #13141c;
-  --bg-secondary: #181922;
-  --bg-tertiary: #20212c;
-  --bg-elevated: #1d1e29;
-  --bg-hover: rgba(255, 255, 255, 0.045);
-  --bg-active: rgba(124, 108, 255, 0.16);
-  --bg-card: rgba(24, 25, 34, 0.92);
-  --bg-overlay: rgba(6, 7, 12, 0.66);
+  /* Superfícies */
+  --bg-app: #100f0e;
+  --bg-primary: #181614;
+  --bg-secondary: #1d1b18;
+  --bg-tertiary: #27241f;
+  --bg-elevated: #211e1b;
+  --bg-hover: rgba(255, 238, 214, 0.045);
+  --bg-active: rgba(232, 120, 63, 0.14);
+  --bg-card: #1d1b18;
+  --bg-overlay: rgba(10, 8, 6, 0.72);
 
-  --border-color: rgba(255, 255, 255, 0.07);
-  --border-strong: rgba(255, 255, 255, 0.12);
-  --border-focus: #7c6cff;
+  --border-color: rgba(255, 236, 214, 0.075);
+  --border-strong: rgba(255, 236, 214, 0.14);
+  --border-focus: #e8783f;
 
-  /* Text */
-  --text-primary: #eef0f6;
-  --text-secondary: #a9adc1;
-  --text-muted: #6e7389;
+  /* Texto */
+  --text-primary: #f2ece4;
+  --text-secondary: #b8afa3;
+  --text-muted: #857c71;
+  --text-on-accent: #1c120c;
 
-  /* Accent */
-  --accent-primary: #7c6cff;
-  --accent-primary-hover: #8f82ff;
-  --accent-secondary: #4f8cff;
-  --accent-gradient: linear-gradient(135deg, #8b7bff 0%, #5b8cff 100%);
-  --accent-glow: rgba(124, 108, 255, 0.35);
-  --accent-soft: rgba(124, 108, 255, 0.14);
+  /* Destaque */
+  --accent-primary: #e8783f;
+  --accent-primary-hover: #f08a54;
+  --accent-secondary: #6baf7b;
+  --accent-gradient: #e8783f;
+  --accent-glow: transparent;
+  --accent-soft: rgba(232, 120, 63, 0.14);
 
-  --accent-success: #34d399;
-  --accent-warning: #fbbf24;
-  --accent-danger: #f43f5e;
-  --accent-danger-hover: #e11d48;
+  --accent-success: #6baf7b;
+  --accent-warning: #e5a23a;
+  --accent-danger: #e5484d;
+  --accent-danger-hover: #d13b40;
 
-  --status-online: #34d399;
-  --status-idle: #fbbf24;
-  --status-dnd: #f43f5e;
-  --status-offline: #6e7389;
+  --status-online: #6baf7b;
+  --status-idle: #e5a23a;
+  --status-dnd: #e5484d;
+  --status-offline: #857c71;
 
-  /* Shape & depth */
-  --radius-sm: 8px;
-  --radius-md: 12px;
-  --radius-lg: 16px;
-  --radius-xl: 22px;
+  /* Forma e profundidade */
+  --radius-sm: 4px;
+  --radius-md: 6px;
+  --radius-lg: 8px;
+  --radius-xl: 10px;
   --radius-full: 9999px;
 
-  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3);
-  --shadow-md: 0 8px 24px rgba(0, 0, 0, 0.35);
-  --shadow-lg: 0 24px 64px rgba(0, 0, 0, 0.55);
-  --ring: 0 0 0 3px rgba(124, 108, 255, 0.35);
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.35);
+  --shadow-md: 0 6px 16px rgba(0, 0, 0, 0.35);
+  --shadow-lg: 0 16px 40px rgba(0, 0, 0, 0.45);
+  --ring: 0 0 0 2px rgba(232, 120, 63, 0.5);
 
   --ease: cubic-bezier(0.2, 0.8, 0.2, 1);
 
   /* Layout */
   --titlebar-height: 36px;
-  --server-sidebar-width: 72px;
-  --channel-sidebar-width: 256px;
-  --member-sidebar-width: 248px;
-  --panel-gap: 8px;
+  --server-sidebar-width: 68px;
+  --channel-sidebar-width: 248px;
+  --member-sidebar-width: 240px;
+  --panel-gap: 0px;
 
-  --font-main: 'Inter Variable', 'Segoe UI Variable', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  --font-main: 'Figtree Variable', 'Segoe UI Variable', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
   --font-mono: 'JetBrains Mono Variable', 'Cascadia Code', Consolas, monospace;
 
   color-scheme: dark;
@@ -87,7 +90,6 @@ body {
 
 body {
   font-family: var(--font-main);
-  font-feature-settings: 'cv11', 'ss01', 'ss03';
   background-color: var(--bg-app);
   color: var(--text-primary);
   overflow: hidden;
@@ -147,7 +149,7 @@ textarea {
   height: 100vh;
   width: 100vw;
   background:
-    radial-gradient(1200px 600px at 15% -10%, rgba(124, 108, 255, 0.12), transparent 60%),
+    radial-gradient(1200px 600px at 15% -10%, color-mix(in srgb, var(--accent-primary) 12%, transparent), transparent 60%),
     radial-gradient(900px 500px at 110% 110%, rgba(79, 140, 255, 0.08), transparent 60%),
     var(--bg-app);
 }
@@ -914,7 +916,7 @@ textarea {
 }
 
 .chat-input-box:focus-within {
-  border-color: rgba(124, 108, 255, 0.55);
+  border-color: color-mix(in srgb, var(--accent-primary) 55%, transparent);
   box-shadow: var(--ring);
 }
 
@@ -1000,7 +1002,7 @@ textarea {
 }
 
 .role-badge.owner { background-color: rgba(251, 191, 36, 0.14); color: #fbbf24; }
-.role-badge.admin { background-color: rgba(124, 108, 255, 0.18); color: #a99fff; }
+.role-badge.admin { background-color: color-mix(in srgb, var(--accent-primary) 18%, transparent); color: var(--accent-primary); }
 .role-badge.moderator { background-color: rgba(52, 211, 153, 0.14); color: #34d399; }
 
 /* --- Voice room & streams ----------------------------------------------------- */
@@ -1011,7 +1013,7 @@ textarea {
   flex-direction: column;
   min-width: 0;
   background:
-    radial-gradient(800px 400px at 50% 0%, rgba(124, 108, 255, 0.1), transparent 70%),
+    radial-gradient(800px 400px at 50% 0%, color-mix(in srgb, var(--accent-primary) 10%, transparent), transparent 70%),
     var(--bg-primary);
   border: 1px solid var(--border-color);
   border-radius: var(--radius-lg);

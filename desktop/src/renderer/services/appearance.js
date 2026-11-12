@@ -7,7 +7,7 @@ const LEGACY_THEME_KEY = 'concord_theme';
 
 // `preview`: [app background, panel, accent, text] for the theme picker.
 export const THEMES = [
-  { id: 'dark', name: 'Quintal', description: 'Violeta sobre grafite', preview: ['#0b0c12', '#181922', '#7c6cff', '#eef0f6'] },
+  { id: 'dark', name: 'Quintal', description: 'Terracota sobre carvão quente', preview: ['#100f0e', '#1d1b18', '#e8783f', '#f2ece4'] },
   { id: 'midnight', name: 'Midnight OLED', description: 'Preto absoluto', preview: ['#000000', '#0b0b10', '#8b7bff', '#f2f2f7'] },
   { id: 'slate', name: 'Grafite', description: 'Cinza neutro e sóbrio', preview: ['#10131a', '#1d2230', '#8ea2ff', '#e6eaf2'] },
   { id: 'nebula', name: 'Nebulosa', description: 'Roxo cósmico com magenta', preview: ['#0d0717', '#1a1029', '#d946ef', '#f5ecff'] },
@@ -21,13 +21,13 @@ export const THEMES = [
   { id: 'sunset', name: 'Pôr do Sol', description: 'Laranja e coral quentes', preview: ['#140c08', '#22150f', '#fb923c', '#fff1e8'] },
   { id: 'mocha', name: 'Café', description: 'Marrom aconchegante', preview: ['#161210', '#241d19', '#d6a374', '#f5ebe0'] },
   { id: 'cyber', name: 'Cyberpunk', description: 'Neon amarelo e ciano', preview: ['#050508', '#0e0e16', '#facc15', '#f5f5f5'] },
-  { id: 'light', name: 'Claro', description: 'Branco limpo', preview: ['#e9ebf2', '#ffffff', '#6d5cf6', '#12131a'], light: true },
+  { id: 'light', name: 'Claro', description: 'Papel e linho', preview: ['#ece6dc', '#f8f4ee', '#c4582a', '#211a14'], light: true },
   { id: 'latte', name: 'Latte', description: 'Claro e quentinho', preview: ['#efe7dd', '#fbf7f2', '#c2703d', '#3b2a20'], light: true },
   { id: 'lavender', name: 'Lavanda', description: 'Lilás suave', preview: ['#ebe7f7', '#f9f7ff', '#8b5cf6', '#221b38'], light: true },
   { id: 'mint', name: 'Menta', description: 'Verde fresco e claro', preview: ['#e3f1ec', '#f7fcfa', '#10b981', '#10241d'], light: true }
 ];
 
-export const ACCENT_PRESETS = ['#7c6cff', '#5b8cff', '#38bdf8', '#2dd4bf', '#34d399', '#a3e635', '#facc15', '#fb923c', '#f43f5e', '#ec4899', '#d946ef', '#94a3b8'];
+export const ACCENT_PRESETS = ['#e8783f', '#7c6cff', '#5b8cff', '#38bdf8', '#2dd4bf', '#34d399', '#a3e635', '#facc15', '#fb923c', '#f43f5e', '#ec4899', '#d946ef', '#94a3b8'];
 
 // CSS backgrounds that need no download.
 export const CHAT_BACKGROUNDS = [
@@ -81,20 +81,6 @@ function mix([r, g, b], amount) {
   return `#${c(r)}${c(g)}${c(b)}`;
 }
 
-function rotateHue([r, g, b], degrees) {
-  // Small hue rotation for the second gradient stop.
-  const rad = (degrees * Math.PI) / 180;
-  const cos = Math.cos(rad);
-  const sin = Math.sin(rad);
-  const m = [
-    0.213 + cos * 0.787 - sin * 0.213, 0.715 - cos * 0.715 - sin * 0.715, 0.072 - cos * 0.072 + sin * 0.928,
-    0.213 - cos * 0.213 + sin * 0.143, 0.715 + cos * 0.285 + sin * 0.14, 0.072 - cos * 0.072 - sin * 0.283,
-    0.213 - cos * 0.213 - sin * 0.787, 0.715 - cos * 0.715 + sin * 0.715, 0.072 + cos * 0.928 + sin * 0.072
-  ];
-  const clamp = (v) => Math.max(0, Math.min(255, Math.round(v))).toString(16).padStart(2, '0');
-  return `#${clamp(m[0] * r + m[1] * g + m[2] * b)}${clamp(m[3] * r + m[4] * g + m[5] * b)}${clamp(m[6] * r + m[7] * g + m[8] * b)}`;
-}
-
 const ACCENT_VARS = ['--accent-primary', '--accent-primary-hover', '--accent-gradient', '--accent-glow', '--accent-soft', '--bg-active', '--border-focus', '--ring'];
 
 /** Applies the saved appearance to the document (call before first paint too). */
@@ -109,8 +95,9 @@ export function applyAppearance(value = current) {
     const [r, g, b] = rgb;
     root.style.setProperty('--accent-primary', value.accent);
     root.style.setProperty('--accent-primary-hover', mix(rgb, 0.15));
-    root.style.setProperty('--accent-gradient', `linear-gradient(135deg, ${mix(rgb, 0.1)} 0%, ${rotateHue(rgb, -28)} 100%)`);
-    root.style.setProperty('--accent-glow', `rgba(${r}, ${g}, ${b}, 0.35)`);
+    // Destaque sólido, sem degradê nem brilho (identidade do Quintal).
+    root.style.setProperty('--accent-gradient', value.accent);
+    root.style.setProperty('--accent-glow', 'transparent');
     root.style.setProperty('--accent-soft', `rgba(${r}, ${g}, ${b}, 0.14)`);
     root.style.setProperty('--bg-active', `rgba(${r}, ${g}, ${b}, 0.16)`);
     root.style.setProperty('--border-focus', value.accent);

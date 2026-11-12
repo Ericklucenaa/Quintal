@@ -229,16 +229,66 @@ app.whenReady().then(async () => {
     await api(A).js(`window.__room3d.setTheme('terraco'); return true;`);
     await sleep(800);
 
+    // --- Personalização ---------------------------------------------------------
+    await api(B).js(`[...document.querySelectorAll('.room3d-chip')].find((b) => b.textContent.includes('Personalizar')).click(); return true;`);
+    await api(B).waitFor(`document.querySelector('.cz-panel')`, 'painel de personalização');
+    await api(B).js(`[...document.querySelectorAll('.cz-presets button')].find((b) => b.textContent === 'Pirata').click(); return true;`);
+    let seenLook = null;
+    for (let i = 0; i < 20 && seenLook?.hat !== 'pirata'; i++) {
+      await sleep(200);
+      seenLook = await api(A).js(`return window.__room3d.remoteLook('${bId}')`);
+    }
+    check('personalização: B escolhe o estilo Pirata e A vê a roupa nova', seenLook?.hat === 'pirata' && seenLook?.glasses === 'tapaolho', JSON.stringify(seenLook));
+    await sleep(1200);
+    await shot(B, '08_personalizar');
+    await api(B).js(`[...document.querySelectorAll('.cz-tabs button')].find((b) => b.textContent === 'Roupas').click(); return true;`);
+    await sleep(300);
+    await shot(B, '08b_personalizar_roupas');
+    await api(B).js(`document.querySelector('.cz-done').click(); return true;`);
+    await sleep(500);
+    await api(A).js('window.__room3d.teleport(1.2, 4.2); return true;');
+    await api(B).js('window.__room3d.teleport(0, 6.3); window.__room3d.setCamYaw(Math.PI); return true;');
+    await sleep(1500);
+    await shot(B, '09_avatares_humanos');
+
+    // --- Primeira pessoa --------------------------------------------------------
+    await api(B).js(`window.dispatchEvent(new KeyboardEvent('keydown', { code: 'KeyV' })); return true;`);
+    await sleep(800);
+    const fp = await api(B).js('return { view: window.__room3d.view(), y: window.__room3d.cameraY() }');
+    check('primeira pessoa: a câmera vai para a altura dos olhos', fp.view === 'first' && fp.y > 1.3 && fp.y < 1.9, JSON.stringify(fp));
+    await api(B).js(`window.dispatchEvent(new KeyboardEvent('keydown', { code: 'KeyT' })); return true;`);
+    await sleep(800);
+    await shot(B, '10_primeira_pessoa');
+    await api(B).js(`window.dispatchEvent(new KeyboardEvent('keydown', { code: 'KeyV' })); return true;`);
+    await sleep(500);
+
     // --- TV com transmissão de tela ------------------------------------------
     await startShare(A, 'A');
     await api(B).waitFor(`window.__room3d.tvMode() === 'video'`, 'TV de B mostra a tela de A', 25000);
     check('TV: B assiste a tela de A na TV da sala', true);
     await api(A).waitFor(`window.__room3d.tvMode() === 'video' && window.__room3d.tvLocal()`, 'A vê a própria tela na TV', 15000);
     check('TV: quem transmite vê a própria tela na TV', true);
+    await api(B).js(`window.dispatchEvent(new KeyboardEvent('keydown', { code: 'KeyV' })); window.dispatchEvent(new KeyboardEvent('keydown', { code: 'KeyT' })); return true;`);
+    await sleep(1500);
+    await shot(B, '04b_tv_primeira_pessoa');
+    await api(B).js(`window.dispatchEvent(new KeyboardEvent('keydown', { code: 'KeyV' })); return true;`);
     const sw0 = await api(B).js('return window.__room3d.tvSwitches()');
     await sleep(5000);
     const sw1 = await api(B).js('return window.__room3d.tvSwitches()');
     check('TV: a fonte da TV fica estável assistindo (não pisca)', sw1 === sw0, `trocas de fonte em 5 s: ${sw1 - sw0}`);
+    // sair do 3D enquanto assiste: o vídeo clássico precisa continuar (não pode ficar preto)
+    await api(B).js(`document.querySelector('.dock-btn[title="Voltar para a visualização clássica"]').click(); return true;`);
+    await api(B).waitFor(`document.querySelector('.screen-video')`, 'vídeo clássico de B', 15000);
+    await sleep(1500);
+    const classic = await api(B).js(`
+      const v = document.querySelector('.screen-video');
+      const f1 = v.getVideoPlaybackQuality().totalVideoFrames;
+      await new Promise((r) => setTimeout(r, 1500));
+      return { hasSource: Boolean(v.srcObject), width: v.videoWidth, advancing: v.getVideoPlaybackQuality().totalVideoFrames > f1 };
+    `);
+    check('saindo do 3D: a transmissão continua no modo clássico (não fica preta)', classic.hasSource && classic.width > 0 && classic.advancing, JSON.stringify(classic));
+    await api(B).js(`document.querySelector('.dock-btn[title="Entrar na sala 3D"]').click(); return true;`);
+    await api(B).waitFor(`window.__room3d && window.__room3d.tvMode() === 'video'`, 'B de volta à sala com a TV', 30000);
     const shareSounds = await api(B).js('return window.__appSoundLog || []');
     check('sons: B ouve o som de "transmissão começou"', shareSounds.includes('screen-start'), shareSounds.join(','));
     await api(B).js('window.__room3d.teleport(0, 0.3); window.__room3d.setCamYaw(Math.PI); return true;');
@@ -254,7 +304,12 @@ app.whenReady().then(async () => {
     const tvDiag = await api(B).js(`return { mode: window.__room3d.tvMode(), aoVivo: [...document.querySelectorAll('.live-badge')].length }`);
     const aDock = await api(A).js(`return { sharing: Boolean(document.querySelector('.dock-btn.on[title="Parar transmissão"]')) }`);
     check('TV: ao parar a transmissão, a TV volta ao aviso', tvBack, JSON.stringify({ B: tvDiag, A: aDock }));
-    const stopSounds = await api(B).js('return window.__appSoundLog || []');
+    // o som de "parou" vem da presença no Firestore, que pode chegar uns segundos depois
+    let stopSounds = [];
+    for (let i = 0; i < 16 && !stopSounds.includes('screen-stop'); i++) {
+      stopSounds = await api(B).js('return window.__appSoundLog || []');
+      if (!stopSounds.includes('screen-stop')) await sleep(500);
+    }
     check('sons: B ouve o som de "transmissão parou" (diferente do de começar)', stopSounds.includes('screen-stop'), stopSounds.join(','));
 
     // --- Mensagens maliciosas são ignoradas ----------------------------------

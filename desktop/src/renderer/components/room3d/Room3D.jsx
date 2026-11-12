@@ -1,17 +1,18 @@
 import React, { useEffect, useRef, useState } from 'react';
 import * as THREE from 'three';
-import { MicOff, Headphones, Maximize2, Box, Hand, Music, PartyPopper, HelpCircle, X, Palette, Check } from 'lucide-react';
+import { MicOff, Headphones, Maximize2, Box, Hand, Music, PartyPopper, HelpCircle, X, Palette, Check, Shirt, Eye, Video, Tv } from 'lucide-react';
 import { useVoice } from '../../context/VoiceContext';
 import { useScreenShare } from '../../context/ScreenShareContext';
 import { useAuth } from '../../context/AuthContext';
 import { defaultAvatar } from '../../services/cloud/util';
 import { logWarn } from '../../services/log';
 import { playAppSound } from '../../services/soundEffects';
-import { SEATS, spawnFor, THROWABLE_SPAWNS } from '../../services/room3d/layout';
+import { SEATS, SCREEN, spawnFor, THROWABLE_SPAWNS } from '../../services/room3d/layout';
+import { loadMyLook, saveMyLook, defaultLookFor, validateLook } from '../../services/room3d/looks';
 import { step, nearestSeat, sitAt, lerpAngle, resolve, groundAt } from '../../services/room3d/movement';
 import {
   decode, encodeReaction, encodeState, encodeGrab, encodeThrow, encodeDrop, encodeRest, encodeHit,
-  encodeTheme, encodeSnapshot, createRateLimiter, REACTIONS
+  encodeTheme, encodeSnapshot, encodeLook, createRateLimiter, REACTIONS
 } from '../../services/room3d/protocol';
 import {
   initialObjects, stepObject, advanceThrown, throwFrom, dropFrom, nearestPickable, bounceOffPerson, speedOf
@@ -21,6 +22,7 @@ import { spatialGain } from '../../services/room3d/spatial';
 import { buildRoom, drawPlaceholder, makePlaceholderCanvas } from './roomScene';
 import { makeThrowable } from './props';
 import { Avatar } from './avatar';
+import CustomizePanel from './CustomizePanel';
 
 const SEND_INTERVAL = 100; // ms (10 Hz enquanto algo muda)
 const HEARTBEAT = 1500; // ms (estado completo mesmo parado)
@@ -38,6 +40,7 @@ const KEYMAP = {
   ShiftLeft: 'run', ShiftRight: 'run'
 };
 const EMOTE_KEYS = { Digit1: 'wave', Digit2: 'dance', Digit3: 'cheer' };
+const seatTopOf = (i) => (SEATS[i]?.high ? 0.83 : SEATS[i]?.stool ? 0.47 : 0.55);
 
 // Verificado uma única vez e com o contexto de teste liberado na hora: o navegador
 // aceita poucos contextos WebGL ativos (16 no Chromium) e, passando disso, derruba
@@ -88,6 +91,9 @@ export default function Room3D({ onExpandScreen }) {
   const [themeId, setThemeId] = useState(() => readTheme(channelId).id);
   const [themeMenu, setThemeMenu] = useState(false);
   const [holding, setHolding] = useState(false);
+  const [look, setLook] = useState(() => loadMyLook(myId));
+  const [view, setView] = useState(() => (localStorage.getItem('concord_room3d_view') === 'first' ? 'first' : 'third'));
+  const [customizing, setCustomizing] = useState(false);
 
   useEffect(() => {
     const timer = setTimeout(() => setHelpOpen(false), 9000);
@@ -96,10 +102,20 @@ export default function Room3D({ onExpandScreen }) {
 
   // Valores que o laço de animação lê sem recriar a cena.
   const live = useRef({});
+  const commandsRef = useRef({});
   live.current.voiceUsers = voice.voiceUsers;
   live.current.spatialOn = spatialOn;
+  live.current.view = view;
+  live.current.customizing = customizing;
 
-  const commandsRef = useRef({});
+  useEffect(() => {
+    localStorage.setItem('concord_room3d_view', view);
+  }, [view]);
+  useEffect(() => {
+    saveMyLook(look);
+    commandsRef.current.setLook?.(look);
+  }, [look]);
+
 
   // TV: a mesma regra do palco clássico (minha tela quando eu foco nela ou não assisto ninguém).
   const tvStream = share.displayedStream || null;
@@ -180,6 +196,9 @@ export default function Room3D({ onExpandScreen }) {
     const hitLimiter = createRateLimiter(4, 1000);
     let hitsTaken = 0;
     let renderError = null;
+    let myLook = loadMyLook(myId);
+    const remoteLooks = new Map();
+    let fpPitch = 0;
     let resizes = 0;
     let renderErrors = 0;
     let contextLosses = 0;
@@ -311,7 +330,7 @@ export default function Room3D({ onExpandScreen }) {
     const ensureAvatar = (u) => {
       let entry = avatars.get(u.userId);
       if (!entry) {
-        const avatar = new Avatar(u.userId);
+        const avatar = new Avatar(u.userId, u.userId === myId ? myLook : remoteLooks.get(u.userId) || defaultLookFor(u.userId));
         room.scene.add(avatar.root);
         const start = u.userId === myId ? me : spawnFor(u.userId);
         entry = { avatar, shown: { x: start.x, z: start.z, y: 0, yaw: start.yaw }, label: makeLabel(u), lastNonce: 0, wasAir: false };
@@ -434,6 +453,10 @@ export default function Room3D({ onExpandScreen }) {
             }
           });
           break;
+        case 'look':
+          remoteLooks.set(from, msg.look);
+          avatars.get(from)?.avatar.setLook(msg.look);
+          break;
         case 'theme':
           if (msg.ts > themeStamp) {
             themeStamp = msg.ts;
@@ -449,6 +472,7 @@ export default function Room3D({ onExpandScreen }) {
     const offMsg = voice.onRoomMessage(onRemote);
     const offOpen = voice.onRoomPeerOpen((id) => {
       voice.sendRoomMessage(encodeState(me), id);
+      voice.sendRoomMessage(encodeLook(myLook), id);
       voice.sendRoomMessage(encodeSnapshot(objects), id);
       if (themeStamp > 0) voice.sendRoomMessage(encodeTheme(theme.id, themeStamp), id);
     });
@@ -518,6 +542,18 @@ export default function Room3D({ onExpandScreen }) {
       playAppSound('room-throw', 0.6);
       sendState(true);
     };
+    commandsRef.current.setLook = (l) => {
+      myLook = validateLook(l);
+      avatars.get(myId)?.avatar.setLook(myLook);
+      voice.sendRoomMessage(encodeLook(myLook));
+    };
+    commandsRef.current.lookAtTv = () => {
+      const dz = SCREEN.z - me.z;
+      const dx = SCREEN.x - me.x;
+      camYaw = Math.atan2(dx, dz);
+      const eyeY = (me.seat >= 0 ? seatTopOf(me.seat) + 0.7 : 1.6 + me.y);
+      fpPitch = Math.atan2(SCREEN.y - eyeY, Math.hypot(dx, dz));
+    };
     commandsRef.current.setTheme = (id) => {
       themeStamp = Date.now();
       localStorage.setItem(themeKey(channelId), JSON.stringify({ id, ts: themeStamp }));
@@ -540,6 +576,10 @@ export default function Room3D({ onExpandScreen }) {
         commandsRef.current.toggleSit();
       } else if (e.code === 'KeyF' && !e.repeat) {
         commandsRef.current.grabOrDrop();
+      } else if (e.code === 'KeyV' && !e.repeat) {
+        setView((v) => (v === 'first' ? 'third' : 'first'));
+      } else if (e.code === 'KeyT' && !e.repeat) {
+        commandsRef.current.lookAtTv();
       } else if (e.code === 'KeyG' && !e.repeat) {
         commandsRef.current.throw();
       } else if (EMOTE_KEYS[e.code] && !e.repeat) {
@@ -564,8 +604,9 @@ export default function Room3D({ onExpandScreen }) {
     };
     const onPointerMove = (e) => {
       if (!dragging) return;
-      camYaw -= (e.clientX - dragging.x) * 0.006;
-      camPitch = Math.max(0.12, Math.min(1.25, camPitch + (e.clientY - dragging.y) * 0.004));
+      camYaw -= (e.clientX - dragging.x) * (live.current.view === 'first' ? 0.005 : 0.006);
+      if (live.current.view === 'first') fpPitch = Math.max(-1.1, Math.min(1.1, fpPitch - (e.clientY - dragging.y) * 0.004));
+      else camPitch = Math.max(0.12, Math.min(1.25, camPitch + (e.clientY - dragging.y) * 0.004));
       dragging.x = e.clientX;
       dragging.y = e.clientY;
     };
@@ -734,17 +775,19 @@ export default function Room3D({ onExpandScreen }) {
           moving: Boolean(s?.moving),
           running: Boolean(s?.running),
           seat,
-          high: seat >= 0 && Boolean(SEATS[seat]?.high),
+          seatTop: seatTopOf(seat),
           speaking: Boolean(entry.user?.isSpeaking),
           airborne,
           holding: holders.has(id)
         });
 
-        const headY = seat >= 0 ? (SEATS[seat]?.high ? 2.15 : 1.75) : 2.15 + entry.shown.y;
+        const firstPersonMe = isMe && live.current.view === 'first' && !live.current.customizing;
+        entry.avatar.setVisible(!firstPersonMe);
+        const headY = entry.avatar.labelHeight(seat >= 0, seatTopOf(seat)) + (seat >= 0 ? 0 : entry.shown.y);
         projected.set(entry.shown.x, headY, entry.shown.z).project(camera);
         const visible = projected.z < 1 && Math.abs(projected.x) < 1.1 && Math.abs(projected.y) < 1.1;
         const el = entry.label.el;
-        el.style.display = visible ? '' : 'none';
+        el.style.display = visible && !firstPersonMe ? '' : 'none';
         if (visible) {
           el.style.transform = `translate(-50%, -100%) translate(${(projected.x * 0.5 + 0.5) * mount.clientWidth}px, ${(-projected.y * 0.5 + 0.5) * mount.clientHeight}px)`;
           el.classList.toggle('speaking', Boolean(entry.user?.isSpeaking));
@@ -761,19 +804,44 @@ export default function Room3D({ onExpandScreen }) {
         voice.updateSpatialPositions({ x: me.x, z: me.z, yaw: camYaw }, positions);
       }
 
-      // câmera em terceira pessoa (com tremida ao levar um golpe)
-      camGoal.set(me.x, me.seat >= 0 ? 1.1 : 1.3 + me.y, me.z);
-      camTarget.lerp(camGoal, Math.min(1, dt * 8));
-      const horiz = Math.cos(camPitch) * camDist;
+      // câmera (com tremida ao levar um golpe)
       shake = Math.max(0, shake - dt);
       const sx = shake > 0 ? (Math.random() - 0.5) * shake * 0.6 : 0;
       const sy = shake > 0 ? (Math.random() - 0.5) * shake * 0.6 : 0;
-      camera.position.set(
-        camTarget.x - Math.sin(camYaw) * horiz + sx,
-        camTarget.y + Math.sin(camPitch) * camDist + sy,
-        camTarget.z - Math.cos(camYaw) * horiz
-      );
-      camera.lookAt(camTarget);
+      const myAvatar = avatars.get(myId)?.avatar;
+      const eyeY = me.seat >= 0
+        ? seatTopOf(me.seat) + 0.06 + ((myAvatar?.headTop ?? 1.7) - (myAvatar?.hipY ?? 0.92)) - 0.16
+        : (myAvatar?.headTop ?? 1.75) - 0.18 + me.y;
+      if (live.current.customizing) {
+        // de frente para o próprio avatar, para ver a roupa nova
+        camGoal.set(me.x, (me.seat >= 0 ? 0.9 : 1.15) + (me.seat >= 0 ? 0 : me.y), me.z);
+        camTarget.lerp(camGoal, Math.min(1, dt * 8));
+        const fy = me.yaw;
+        camera.position.set(camTarget.x + Math.sin(fy) * 2.7, camTarget.y + 0.35, camTarget.z + Math.cos(fy) * 2.7);
+        camera.lookAt(camTarget);
+      } else if (live.current.view === 'first') {
+        // primeira pessoa: olhos do avatar, olhar livre com o mouse
+        const fx = Math.sin(camYaw);
+        const fz = Math.cos(camYaw);
+        camera.position.set(me.x + fx * 0.14 + sx * 0.3, eyeY + sy * 0.3, me.z + fz * 0.14);
+        camGoal.set(
+          camera.position.x + fx * Math.cos(fpPitch),
+          camera.position.y + Math.sin(fpPitch),
+          camera.position.z + fz * Math.cos(fpPitch)
+        );
+        camera.lookAt(camGoal);
+        camTarget.set(me.x, eyeY, me.z);
+      } else {
+        camGoal.set(me.x, me.seat >= 0 ? 1.1 : 1.3 + me.y, me.z);
+        camTarget.lerp(camGoal, Math.min(1, dt * 8));
+        const horiz = Math.cos(camPitch) * camDist;
+        camera.position.set(
+          camTarget.x - Math.sin(camYaw) * horiz + sx,
+          camTarget.y + Math.sin(camPitch) * camDist + sy,
+          camTarget.z - Math.cos(camYaw) * horiz
+        );
+        camera.lookAt(camTarget);
+      }
 
       try {
         refreshTv(now);
@@ -825,6 +893,10 @@ export default function Room3D({ onExpandScreen }) {
       }),
       resetPeakY: () => peakY.clear(),
       theme: () => theme.id,
+      myLook: () => ({ ...myLook }),
+      remoteLook: (id) => (remoteLooks.has(id) ? { ...remoteLooks.get(id) } : null),
+      view: () => live.current.view,
+      cameraY: () => camera.position.y,
       setTheme: (id) => commandsRef.current.setTheme(id)
     };
 
@@ -880,6 +952,8 @@ export default function Room3D({ onExpandScreen }) {
           <span><kbd>F</kbd> pegar/soltar</span>
           <span><kbd>G</kbd> ou clique: arremessar</span>
           <span><kbd>1</kbd><kbd>2</kbd><kbd>3</kbd> gestos</span>
+          <span><kbd>V</kbd> 1ª/3ª pessoa</span>
+          <span><kbd>T</kbd> olhar para a TV</span>
           <span>arraste para girar · roda para zoom</span>
           <button className="room3d-help-close" onClick={() => setHelpOpen(false)} aria-label="Fechar atalhos"><X size={13} /></button>
         </div>
@@ -890,6 +964,15 @@ export default function Room3D({ onExpandScreen }) {
       )}
       {hint && <div className="room3d-hint">{hint}</div>}
       <div className="room3d-top-right">
+        <button className={`room3d-chip ${customizing ? 'on' : ''}`} onClick={() => setCustomizing((v) => !v)} aria-pressed={customizing} title="Mudar a aparência do seu personagem">
+          <Shirt size={14} /> Personalizar
+        </button>
+        <button className="room3d-chip" onClick={() => setView((v) => (v === 'first' ? 'third' : 'first'))} title="Alternar entre primeira e terceira pessoa (V)">
+          {view === 'first' ? <Video size={14} /> : <Eye size={14} />} {view === 'first' ? '3ª pessoa' : '1ª pessoa'}
+        </button>
+        <button className="room3d-chip" onClick={() => commandsRef.current.lookAtTv?.()} title="Virar para a TV (T)">
+          <Tv size={14} /> Olhar a TV
+        </button>
         <div className="room3d-theme">
           <button className="room3d-chip" onClick={() => setThemeMenu((v) => !v)} aria-expanded={themeMenu} title="Trocar o tema da sala para todos">
             <Palette size={14} /> {currentTheme.name}
@@ -966,6 +1049,7 @@ export default function Room3D({ onExpandScreen }) {
         ))}
       </div>
       {voice.isMuted && <div className="room3d-muted"><MicOff size={13} /> Microfone desligado</div>}
+      {customizing && <CustomizePanel look={look} onChange={setLook} onClose={() => setCustomizing(false)} />}
     </div>
   );
 }

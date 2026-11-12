@@ -4,6 +4,7 @@
 import { ROOM, SEATS, THROWABLE_IDS } from './layout';
 import { MAX_SPEED } from './throwables';
 import { THEME_IDS } from './themes';
+import { validateLook } from './looks';
 
 export const PROTOCOL_VERSION = 1;
 export const MAX_MESSAGE_BYTES = 1024;
@@ -52,6 +53,7 @@ export const encodeDrop = (id, ver, o) => enc('d', { o: id, r: ver, ...motion(o)
 export const encodeRest = (id, ver, o) => enc('x', { o: id, r: ver, x: round(o.x, 1000), y: round(o.y, 1000), z: round(o.z, 1000) });
 export const encodeHit = (target, id, dx, dz) => enc('h', { u: target, o: id, dx: round(dx, 1000), dz: round(dz, 1000) });
 export const encodeTheme = (theme, ts) => enc('m', { th: theme, r: ts });
+export const encodeLook = (look) => enc('a', { l: validateLook(look) });
 export function encodeSnapshot(objects) {
   return enc('p', {
     l: Array.from(objects.values()).map((o) => [o.id, round(o.x), round(o.y), round(o.z), o.holder || '', o.ver])
@@ -104,6 +106,9 @@ export function decode(raw) {
       const len = Math.hypot(m.dx, m.dz) || 1;
       return { type: 'hit', target: m.u, id: m.o, dx: m.dx / len, dz: m.dz / len };
     }
+    case 'a':
+      // aparência: só valores do catálogo (o que não existir vira o padrão)
+      return m.l && typeof m.l === 'object' ? { type: 'look', look: validateLook(m.l) } : null;
     case 'm':
       return THEME_IDS.includes(m.th) && finite(m.r) ? { type: 'theme', theme: m.th, ts: m.r } : null;
     case 'p': {

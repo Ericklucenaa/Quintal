@@ -131,10 +131,22 @@ export default function AuthPage() {
 
   return (
     <div className="auth-page">
+      <aside className="auth-aside" aria-hidden="true">
+        <div className="auth-aside-brand">
+          <BrandMark />
+          <strong>QUINTAL</strong>
+        </div>
+        <h2>O lugar onde a sua turma se encontra.</h2>
+        <ul>
+          <li>Voz com supressão de ruído e áudio espacial</li>
+          <li>Transmissão de tela em até 1080p a 60 FPS</li>
+          <li>Uma sala 3D para ficar junto, assistir e brincar</li>
+        </ul>
+      </aside>
       <div className="auth-card">
         <div className="auth-brand">
           <BrandMark className="auth-logo" />
-          <h1 className="auth-title">QUINTAL</h1>
+          <h1 className="auth-title">{isRegister ? 'Criar conta' : 'Entrar'}</h1>
           <p className="auth-subtitle">
             {isRegister 
               ? 'Crie sua conta para conversar e transmitir' 
