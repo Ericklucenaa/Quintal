@@ -65,7 +65,7 @@ async function firstFreeNickname(base, userId) {
 }
 
 /**
- * Makes sure the signed-in Firebase user has a Concord profile and a reserved
+ * Makes sure the signed-in Firebase user has an app profile and a reserved
  * nickname (first Google login, or accounts created by older versions).
  */
 async function ensureProfile(fbUser) {

@@ -2,7 +2,6 @@ import React, { useState } from 'react';
 import { useServer } from '../context/ServerContext';
 import { useAuth } from '../context/AuthContext';
 import {
-  Radio,
   Plus,
   Mail,
   Settings,
@@ -16,6 +15,7 @@ import {
   BellOff,
   Copy
 } from 'lucide-react';
+import BrandMark from './BrandMark';
 import { useNotification } from '../context/NotificationContext';
 import { useUnread } from '../context/UnreadContext';
 import MentionsInbox from './modals/MentionsInbox';
@@ -110,7 +110,7 @@ export default function ServerSidebar() {
           className="server-btn"
           onClick={() => setActiveServer(null)}
         >
-          <Radio size={22} />
+          <BrandMark size={22} />
           {unreadThreadCount > 0 && <span className="badge-counter">{unreadThreadCount}</span>}
         </button>
       </div>

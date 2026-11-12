@@ -70,7 +70,7 @@ export default function OnboardingModal() {
   const createStarter = async () => {
     setBusy(true);
     try {
-      await createServer({ name: `Servidor de ${user.username}`, description: 'Meu primeiro servidor no Concord', starter: true });
+      await createServer({ name: `Servidor de ${user.username}`, description: 'Meu primeiro servidor no Quintal', starter: true });
       setStep(2);
     } catch (err) {
       showError('Criar servidor', err.message);
@@ -102,7 +102,7 @@ export default function OnboardingModal() {
         {step === 0 && (
           <div className="onboarding-body">
             <Radio size={44} className="onboarding-icon" />
-            <h2>Bem-vindo ao Concord, {user.username}!</h2>
+            <h2>Bem-vindo ao Quintal, {user.username}!</h2>
             <p>Converse por texto, fale por voz e transmita sua tela com seus amigos. Vamos deixar tudo pronto em menos de um minuto.</p>
             <button className="btn btn-primary" onClick={() => setStep(1)}>Começar <ArrowRight size={16} /></button>
           </div>

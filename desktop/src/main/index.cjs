@@ -25,21 +25,29 @@ let shellSettings = {
 };
 
 // ---------------------------------------------------------------------------
-// Single instance + concord:// invite links
+// Single instance + quintal:// (and legacy concord://) invite links
 // ---------------------------------------------------------------------------
+
+// Rebranding (Concord -> Quintal): the installed app keeps using the existing
+// data folder, so nobody loses their login, settings or window position.
+if (app.isPackaged) {
+  const legacyUserData = path.join(app.getPath('appData'), 'Concord');
+  if (fs.existsSync(legacyUserData)) app.setPath('userData', legacyUserData);
+}
 
 if (!app.requestSingleInstanceLock()) {
   app.quit();
 }
 
-// Only the installed app registers concord:// (dev runs would point the
-// protocol at the bare electron.exe).
+// Only the installed app registers the protocols (dev runs would point them
+// at the bare electron.exe). concord:// stays so old invite links still work.
 if (app.isPackaged) {
+  app.setAsDefaultProtocolClient('quintal');
   app.setAsDefaultProtocolClient('concord');
 }
 
 function inviteFromArgs(argv) {
-  const link = argv.find((a) => typeof a === 'string' && a.startsWith('concord://'));
+  const link = argv.find((a) => typeof a === 'string' && /^(quintal|concord):\/\//.test(a));
   const match = link && link.match(/invite\/?([A-Za-z0-9]{4,16})/i);
   return match ? match[1].toUpperCase() : null;
 }
@@ -163,9 +171,9 @@ function createTray() {
   const iconPath = path.join(__dirname, 'icon.ico');
   const image = fs.existsSync(iconPath) ? nativeImage.createFromPath(iconPath) : nativeImage.createEmpty();
   tray = new Tray(image);
-  tray.setToolTip('Concord');
+  tray.setToolTip('Quintal');
   tray.setContextMenu(Menu.buildFromTemplate([
-    { label: 'Abrir Concord', click: showWindow },
+    { label: 'Abrir Quintal', click: showWindow },
     { type: 'separator' },
     {
       label: 'Sair',
@@ -545,7 +553,7 @@ function fetchHead(url, redirects = 3) {
   return new Promise((resolve, reject) => {
     assertPublicUrl(url).then((parsed) => {
       const req = https.get(parsed, {
-        headers: { 'User-Agent': 'Mozilla/5.0 (compatible; ConcordLinkPreview/1.0)', Accept: 'text/html' },
+        headers: { 'User-Agent': 'Mozilla/5.0 (compatible; QuintalLinkPreview/1.0)', Accept: 'text/html' },
         timeout: 5000
       }, (res) => {
         if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location && redirects > 0) {
@@ -618,8 +626,10 @@ ipcMain.handle('link:preview', async (_event, url) => {
 // SHA-256 published in the update manifest, then run the installer.
 // ---------------------------------------------------------------------------
 
-const RELEASE_PATH = /^\/Ericklucenaa\/Concord\/releases\/download\/v\d+\.\d+\.\d+\/[\w.-]+\.exe$/;
-const OFFICIAL_RELEASES_PAGE = 'https://github.com/Ericklucenaa/Concord/releases/latest';
+// O repositório passou a se chamar Quintal; o antigo endereço Concord continua como
+// espelho dos instaladores (as versões antigas do app só aceitam esse caminho).
+const RELEASE_PATH = /^\/Ericklucenaa\/(Quintal|Concord)\/releases\/download\/v\d+\.\d+\.\d+\/[\w.-]+\.exe$/;
+const OFFICIAL_RELEASES_PAGE = 'https://github.com/Ericklucenaa/Quintal/releases/latest';
 
 function isOfficialReleaseUrl(url) {
   try {
@@ -655,7 +665,7 @@ function downloadFile(url, dest, onProgress) {
       if (!(hops === 0 ? isOfficialReleaseUrl(current) : isGithubAssetHost(current) || isOfficialReleaseUrl(current))) {
         return fail(new Error('URL de atualização bloqueada: origem não confiável.'));
       }
-      return https.get(current, { headers: { 'User-Agent': 'Concord-Desktop-App' } }, (res) => {
+      return https.get(current, { headers: { 'User-Agent': 'Quintal-Desktop-App' } }, (res) => {
         if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
           res.resume();
           return request(new URL(res.headers.location, current).toString(), hops + 1);
@@ -691,10 +701,10 @@ ipcMain.handle('updater:download-and-install', async (_event, { downloadUrl, ver
       throw new Error('O manifesto de atualização não traz a assinatura SHA-256.');
     }
 
-    const target = downloadUrl || `https://github.com/Ericklucenaa/Concord/releases/download/v${safeVersion}/Concord-Setup-${safeVersion}.exe`;
+    const target = downloadUrl || `https://github.com/Ericklucenaa/Quintal/releases/download/v${safeVersion}/Quintal-Setup-${safeVersion}.exe`;
     if (!isOfficialReleaseUrl(target)) throw new Error('URL de atualização não confiável foi bloqueada.');
 
-    const dest = path.join(app.getPath('temp'), `Concord-Setup-${safeVersion}.exe`);
+    const dest = path.join(app.getPath('temp'), `Quintal-Setup-${safeVersion}.exe`);
     const digest = await downloadFile(target, dest, (progress) => {
       if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('updater:progress', progress);
     });
@@ -728,7 +738,7 @@ ipcMain.handle('auth:google-login', () => new Promise((resolve) => {
     parent: mainWindow,
     modal: true,
     autoHideMenuBar: true,
-    title: 'Concord - Login com o Google',
+    title: 'Quintal - Login com o Google',
     backgroundColor: '#0f1117',
     webPreferences: { nodeIntegration: false, contextIsolation: true, sandbox: true }
   });

@@ -29,12 +29,15 @@ const AUDIT = 'concord_audit';
 const EVENTS = 'concord_events';
 const TEMP_CHANNELS = 'concord_temp_channels';
 
-export const DEFAULT_SERVER_ICON = "data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100' width='100' height='100'><defs><linearGradient id='g' x1='0%25' y1='0%25' x2='100%25' y2='100%25'><stop offset='0%25' stop-color='%236366f1'/><stop offset='100%25' stop-color='%233b82f6'/></linearGradient></defs><rect width='100' height='100' rx='26' fill='url(%23g)'/><circle cx='50' cy='50' r='12' fill='%23ffffff'/><path d='M 30 50 A 20 20 0 0 1 70 50' fill='none' stroke='%23ffffff' stroke-width='5' stroke-linecap='round'/><path d='M 20 50 A 30 30 0 0 1 80 50' fill='none' stroke='%23ffffff' stroke-width='5' stroke-linecap='round' opacity='0.6'/></svg>";
+// Ícone antigo (marca Concord) ainda salvo em servidores criados antes da troca de nome.
+const LEGACY_DEFAULT_SERVER_ICON = "data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100' width='100' height='100'><defs><linearGradient id='g' x1='0%25' y1='0%25' x2='100%25' y2='100%25'><stop offset='0%25' stop-color='%236366f1'/><stop offset='100%25' stop-color='%233b82f6'/></linearGradient></defs><rect width='100' height='100' rx='26' fill='url(%23g)'/><circle cx='50' cy='50' r='12' fill='%23ffffff'/><path d='M 30 50 A 20 20 0 0 1 70 50' fill='none' stroke='%23ffffff' stroke-width='5' stroke-linecap='round'/><path d='M 20 50 A 30 30 0 0 1 80 50' fill='none' stroke='%23ffffff' stroke-width='5' stroke-linecap='round' opacity='0.6'/></svg>";
+export const DEFAULT_SERVER_ICON = "data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100' width='100' height='100'><rect width='100' height='100' fill='%23e8783f'/><circle cx='74' cy='27' r='8' fill='%23ffe3ad'/><path d='M28 80 V52 A22 22 0 0 1 72 52 V80' fill='none' stroke='%231c120c' stroke-width='8' stroke-linecap='round' stroke-linejoin='round'/><path d='M42 62 V80 M50 59 V80 M58 62 V80' fill='none' stroke='%231c120c' stroke-width='6' stroke-linecap='round'/><path d='M18 81 H82' fill='none' stroke='%231c120c' stroke-width='7' stroke-linecap='round'/></svg>";
 
 export function normalizeServer(raw, userId) {
   if (!raw) return null;
   return {
     ...raw,
+    icon: raw.icon === LEGACY_DEFAULT_SERVER_ICON ? DEFAULT_SERVER_ICON : raw.icon,
     channels: Array.isArray(raw.channels) ? raw.channels : [],
     memberIds: Array.isArray(raw.memberIds) ? raw.memberIds : [],
     roles: raw.roles || {},

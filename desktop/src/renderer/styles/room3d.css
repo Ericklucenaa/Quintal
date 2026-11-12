@@ -1,0 +1,190 @@
+/* Sala 3D (Terraço) — sobreposições da interface em cima do canvas WebGL */
+
+.voice-stage.room3d-stage { padding: 0; align-items: stretch; justify-content: stretch; overflow: hidden; }
+
+.room3d {
+  position: relative; flex: 1; min-height: 0; width: 100%; height: 100%;
+  overflow: hidden; background: #1b1d48; user-select: none;
+}
+.room3d-canvas { position: absolute; inset: 0; z-index: 0; width: 100%; height: 100%; display: block; cursor: grab; touch-action: none; }
+.room3d-canvas:active { cursor: grabbing; }
+
+.room3d-labels { position: absolute; inset: 0; z-index: 1; pointer-events: none; overflow: hidden; }
+.room3d-help, .room3d-help-toggle, .room3d-own-note, .room3d-hint, .room3d-top-right, .room3d-presenters, .room3d-actions, .room3d-muted { z-index: 2; }
+.room3d-label {
+  position: absolute; left: 0; top: 0; display: flex; align-items: center; gap: 6px;
+  padding: 3px 9px 3px 3px; border-radius: var(--radius-full);
+  background: rgba(14, 14, 22, 0.72); color: #f4f1ea; font-size: 12px; font-weight: 600;
+  white-space: nowrap; border: 1px solid rgba(255, 255, 255, 0.1);
+  transition: border-color 0.15s, box-shadow 0.15s; will-change: transform;
+}
+.room3d-label img { width: 20px; height: 20px; border-radius: 50%; object-fit: cover; }
+.room3d-label.speaking { border-color: var(--accent-success); box-shadow: 0 0 0 2px rgba(52, 211, 153, 0.35); }
+.room3d-label.remote-unsynced { opacity: 0.6; }
+.room3d-mic-off { display: none; width: 12px; height: 12px; background: #fb7185;
+  -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2.4' stroke-linecap='round'%3E%3Cpath d='M2 2l20 20M18.9 13.5A7 7 0 0 0 19 12v-2M5 10v2a7 7 0 0 0 12 5M15 9.3V5a3 3 0 0 0-5.7-1.3M9 9v3a3 3 0 0 0 5.1 2.1M12 19v3'/%3E%3C/svg%3E") center / contain no-repeat;
+          mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2.4' stroke-linecap='round'%3E%3Cpath d='M2 2l20 20M18.9 13.5A7 7 0 0 0 19 12v-2M5 10v2a7 7 0 0 0 12 5M15 9.3V5a3 3 0 0 0-5.7-1.3M9 9v3a3 3 0 0 0 5.1 2.1M12 19v3'/%3E%3C/svg%3E") center / contain no-repeat; }
+.room3d-label.muted .room3d-mic-off { display: inline-block; }
+.room3d-reaction {
+  position: absolute; left: 50%; bottom: 100%; font-size: 26px; transform: translateX(-50%);
+  animation: room3d-float 2.4s var(--ease) forwards; text-shadow: 0 2px 8px rgba(0, 0, 0, 0.5);
+}
+@keyframes room3d-float {
+  0% { opacity: 0; transform: translate(-50%, 6px) scale(0.6); }
+  15% { opacity: 1; transform: translate(-50%, -6px) scale(1.1); }
+  80% { opacity: 1; transform: translate(-50%, -38px) scale(1); }
+  100% { opacity: 0; transform: translate(-50%, -52px) scale(0.95); }
+}
+
+.room3d-help {
+  position: absolute; left: 14px; top: 14px; display: flex; flex-wrap: wrap; gap: 4px 12px;
+  max-width: min(560px, calc(100% - 300px)); padding: 8px 12px; border-radius: var(--radius-md);
+  background: rgba(14, 14, 22, 0.6); color: rgba(244, 241, 234, 0.82); font-size: 12px;
+  backdrop-filter: blur(10px);
+}
+.room3d-help kbd {
+  display: inline-block; min-width: 18px; padding: 0 5px; margin-right: 3px; border-radius: 5px;
+  background: rgba(255, 255, 255, 0.12); color: #fff; font: 600 11px/18px ui-monospace, Consolas, monospace; text-align: center;
+}
+
+.room3d-help { padding-right: 34px; }
+.room3d-help-close {
+  position: absolute; right: 6px; top: 6px; width: 22px; height: 22px; border: none; border-radius: 6px;
+  display: inline-flex; align-items: center; justify-content: center; background: transparent; color: rgba(244, 241, 234, 0.7); cursor: pointer;
+}
+.room3d-help-close:hover { background: rgba(255, 255, 255, 0.1); color: #fff; }
+.room3d-help-toggle {
+  position: absolute; left: 14px; top: 14px; width: 32px; height: 32px; border-radius: var(--radius-full);
+  display: inline-flex; align-items: center; justify-content: center; border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(14, 14, 22, 0.66); color: rgba(244, 241, 234, 0.9); cursor: pointer; backdrop-filter: blur(10px);
+}
+
+.room3d-hint {
+  position: absolute; left: 50%; bottom: 152px; transform: translateX(-50%);
+  padding: 7px 14px; border-radius: var(--radius-full); background: rgba(14, 14, 22, 0.78);
+  color: #fff; font-size: 13px; font-weight: 600; pointer-events: none;
+}
+
+.room3d-top-right { position: absolute; right: 14px; top: 14px; display: flex; gap: 8px; }
+.room3d-chip {
+  display: inline-flex; align-items: center; gap: 6px; height: 32px; padding: 0 12px;
+  border-radius: var(--radius-full); border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(14, 14, 22, 0.66); color: rgba(244, 241, 234, 0.9); font-size: 12px; font-weight: 600;
+  cursor: pointer; backdrop-filter: blur(10px);
+}
+.room3d-chip:hover { background: rgba(30, 30, 44, 0.85); }
+.room3d-chip.on { border-color: rgba(52, 211, 153, 0.6); color: #b9f5dc; }
+
+.room3d-presenters {
+  position: absolute; left: 50%; top: 14px; transform: translateX(-50%); display: flex; gap: 6px;
+  padding: 5px; border-radius: var(--radius-full); background: rgba(14, 14, 22, 0.7);
+}
+.room3d-presenters button {
+  display: inline-flex; align-items: center; gap: 6px; padding: 5px 12px; border: none; border-radius: var(--radius-full);
+  background: transparent; color: rgba(244, 241, 234, 0.8); font-size: 12px; font-weight: 600; cursor: pointer;
+}
+.room3d-presenters button.active { background: rgba(255, 255, 255, 0.14); color: #fff; }
+
+.room3d-actions {
+  position: absolute; left: 50%; bottom: 96px; transform: translateX(-50%);
+  display: flex; align-items: center; gap: 4px; padding: 5px; border-radius: 14px;
+  background: rgba(14, 14, 22, 0.72); border: 1px solid rgba(255, 255, 255, 0.08); backdrop-filter: blur(14px);
+}
+.room3d-actions button {
+  display: inline-flex; align-items: center; gap: 6px; height: 32px; padding: 0 10px; border: none; border-radius: 10px;
+  background: transparent; color: rgba(244, 241, 234, 0.9); font-size: 12px; font-weight: 600; cursor: pointer;
+}
+.room3d-actions button:hover { background: rgba(255, 255, 255, 0.1); }
+.room3d-actions .room3d-emoji { width: 32px; padding: 0; justify-content: center; font-size: 17px; }
+.room3d-sep { width: 1px; height: 20px; background: rgba(255, 255, 255, 0.14); margin: 0 4px; }
+
+.room3d-muted {
+  position: absolute; right: 14px; bottom: 96px; display: inline-flex; align-items: center; gap: 6px;
+  padding: 6px 10px; border-radius: var(--radius-full); background: rgba(244, 63, 94, 0.18); color: #fecdd3; font-size: 12px; font-weight: 600;
+}
+
+.room3d-fallback {
+  flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px;
+  color: var(--text-secondary); text-align: center; padding: 24px;
+}
+.room3d-fallback strong { color: var(--text-primary); }
+
+@media (max-width: 760px) {
+  .room3d-help { display: none; }
+  .room3d-actions { bottom: 88px; max-width: calc(100% - 24px); overflow-x: auto; }
+  .room3d-actions button:not(.room3d-emoji) { padding: 0 8px; }
+}
+
+/* Temas */
+.room3d-theme { position: relative; }
+.room3d-theme-menu {
+  position: absolute; right: 0; top: 40px; z-index: 3; width: 268px; padding: 6px;
+  border-radius: var(--radius-md); background: rgba(16, 16, 24, 0.94); border: 1px solid rgba(255, 255, 255, 0.1);
+  box-shadow: var(--shadow-lg); backdrop-filter: blur(14px);
+}
+.room3d-theme-menu button {
+  width: 100%; display: flex; align-items: center; gap: 10px; padding: 8px 10px; border: none; border-radius: 9px;
+  background: transparent; color: rgba(244, 241, 234, 0.9); font-size: 13px; font-weight: 600; text-align: left; cursor: pointer;
+}
+.room3d-theme-menu button:hover { background: rgba(255, 255, 255, 0.08); }
+.room3d-theme-menu button.active { background: rgba(255, 255, 255, 0.12); color: #fff; }
+.room3d-theme-name { flex: 1; }
+.room3d-theme-menu em { font-style: normal; font-size: 10px; font-weight: 600; color: #9fe6ff; background: rgba(63, 208, 255, 0.14); padding: 2px 6px; border-radius: 999px; }
+.room3d-swatch { display: inline-flex; border-radius: 6px; overflow: hidden; border: 1px solid rgba(255, 255, 255, 0.15); }
+.room3d-swatch i { width: 10px; height: 18px; display: block; }
+.room3d-theme-note { padding: 6px 10px 4px; font-size: 11px; color: rgba(244, 241, 234, 0.55); }
+
+/* Aviso quando a minha própria tela está na TV */
+.room3d-own-note {
+  position: absolute; left: 50%; top: 56px; transform: translateX(-50%); z-index: 2; max-width: min(560px, calc(100% - 32px));
+  padding: 6px 12px; border-radius: var(--radius-full); background: rgba(14, 14, 22, 0.7); color: rgba(244, 241, 234, 0.85);
+  font-size: 12px; text-align: center; pointer-events: none;
+}
+
+.room3d-actions .room3d-throw { background: var(--accent-gradient); color: #fff; }
+.room3d-actions .room3d-throw:hover { filter: brightness(1.08); background: var(--accent-gradient); }
+
+/* Painel de personalização (superfície sólida, sem efeito de vidro) */
+.cz-panel {
+  position: absolute; left: 14px; top: 56px; bottom: 150px; z-index: 3; width: min(340px, calc(100% - 28px));
+  display: flex; flex-direction: column; background: #17161b; color: #efe9df;
+  border: 1px solid rgba(255, 255, 255, 0.09); border-radius: 10px; box-shadow: 0 18px 40px rgba(0, 0, 0, 0.45);
+}
+.cz-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; padding: 14px 14px 10px; }
+.cz-head h2 { margin: 0; font-size: 15px; font-weight: 700; letter-spacing: -0.01em; }
+.cz-head p { margin: 2px 0 0; font-size: 12px; color: #a39c90; }
+.cz-icon { width: 28px; height: 28px; border: none; border-radius: 6px; background: transparent; color: #a39c90; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; }
+.cz-icon:hover { background: rgba(255, 255, 255, 0.07); color: #fff; }
+.cz-tabs { display: flex; gap: 2px; padding: 0 10px; border-bottom: 1px solid rgba(255, 255, 255, 0.08); overflow-x: auto; }
+.cz-tabs button {
+  padding: 8px 8px 9px; border: none; background: none; color: #a39c90; font-size: 12px; font-weight: 600; cursor: pointer;
+  border-bottom: 2px solid transparent; white-space: nowrap;
+}
+.cz-tabs button.on { color: #fff; border-bottom-color: #e8783f; }
+.cz-body { flex: 1; overflow-y: auto; padding: 12px 14px; display: flex; flex-direction: column; gap: 14px; }
+.cz-note { margin: 0; font-size: 12px; color: #a39c90; line-height: 1.45; }
+.cz-field { display: flex; flex-direction: column; gap: 7px; }
+.cz-label { font-size: 11px; font-weight: 700; color: #cfc7b9; text-transform: uppercase; letter-spacing: 0.06em; display: flex; justify-content: space-between; }
+.cz-label span { text-transform: none; letter-spacing: 0; color: #a39c90; font-weight: 600; }
+.cz-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.cz-chips button, .cz-presets button {
+  padding: 6px 10px; border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 6px; background: #1f1e24; color: #e4ddd1;
+  font-size: 12px; font-weight: 600; cursor: pointer;
+}
+.cz-chips button:hover, .cz-presets button:hover { border-color: rgba(255, 255, 255, 0.24); }
+.cz-chips button.on { background: #e8783f; border-color: #e8783f; color: #1a1210; }
+.cz-presets { display: grid; grid-template-columns: repeat(2, 1fr); gap: 6px; }
+.cz-presets button { text-align: left; padding: 9px 10px; }
+.cz-swatches { display: flex; flex-wrap: wrap; gap: 6px; }
+.cz-swatches button { width: 24px; height: 24px; border-radius: 50%; border: 2px solid rgba(255, 255, 255, 0.12); cursor: pointer; padding: 0; }
+.cz-swatches button.on { border-color: #fff; box-shadow: 0 0 0 2px #e8783f; }
+.cz-field input[type='range'] { width: 100%; accent-color: #e8783f; }
+.cz-random {
+  align-self: flex-start; display: inline-flex; align-items: center; gap: 6px; padding: 7px 12px; border-radius: 6px;
+  border: 1px dashed rgba(255, 255, 255, 0.22); background: transparent; color: #e4ddd1; font-size: 12px; font-weight: 600; cursor: pointer;
+}
+.cz-foot { padding: 10px 14px 14px; border-top: 1px solid rgba(255, 255, 255, 0.08); }
+.cz-done { width: 100%; padding: 9px; border: none; border-radius: 6px; background: #e8783f; color: #1a1210; font-size: 13px; font-weight: 700; cursor: pointer; }
+.cz-done:hover { background: #f08a54; }
+.room3d-chip.on { border-color: rgba(232, 120, 63, 0.7); color: #ffd2b8; }
+@media (max-width: 760px) { .cz-panel { top: 50px; bottom: 140px; } }

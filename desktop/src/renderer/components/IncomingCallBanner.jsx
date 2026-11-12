@@ -50,7 +50,7 @@ export default function IncomingCallBanner() {
     clearInterval(ringRef.current);
     if (!incoming || user?.status === 'dnd') return undefined;
     const info = describeThread(incoming, user.id);
-    showNativeNotification(`📞 ${caller?.username || info.title} está ligando`, { body: 'Clique para atender no Concord', tag: `call_${incoming.id}` });
+    showNativeNotification(`📞 ${caller?.username || info.title} está ligando`, { body: 'Clique para atender no Quintal', tag: `call_${incoming.id}` });
     soundSynthesizer.play('notification');
     ringRef.current = setInterval(() => soundSynthesizer.play('notification'), 2500);
     const stopAfter = setTimeout(() => clearInterval(ringRef.current), 30_000);

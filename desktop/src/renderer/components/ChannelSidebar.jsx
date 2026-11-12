@@ -129,7 +129,7 @@ export default function ChannelSidebar() {
     return (
       <aside className="channel-sidebar">
         <div className="server-header">
-          <span className="server-header-title">Concord</span>
+          <span className="server-header-title">Quintal</span>
         </div>
         <div style={{ padding: 20, color: 'var(--text-muted)', fontSize: 13, flex: 1 }}>
           Selecione ou crie um servidor à esquerda para começar a conversar.

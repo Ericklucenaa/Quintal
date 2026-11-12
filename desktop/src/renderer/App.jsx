@@ -185,7 +185,7 @@ function MainAppContent() {
     updateSettings({});
   }, []);
 
-  // Desktop app opened through a concord:// or web invite link.
+  // Desktop app opened through a quintal:// (or legacy concord://) or web invite link.
   useEffect(() => window.electronAPI?.onInviteLink?.((code) => sessionStorage.setItem('pending_invite_code', code)), []);
 
   useEffect(() => {
@@ -217,7 +217,7 @@ function MainAppContent() {
     return (
       <div className="auth-page">
         <div style={{ color: 'var(--text-secondary)', fontSize: 16, fontWeight: 600 }}>
-          Iniciando Concord...
+          Iniciando Quintal...
         </div>
       </div>
     );
@@ -269,7 +269,7 @@ function MainAppContent() {
 }
 
 installGlobalErrorHandlers();
-window.electronAPI?.getAppVersion?.().then((v) => { window.__CONCORD_VERSION__ = v; }).catch(() => {});
+window.electronAPI?.getAppVersion?.().then((v) => { window.__APP_VERSION__ = v; }).catch(() => {});
 
 export default function App() {
   return (

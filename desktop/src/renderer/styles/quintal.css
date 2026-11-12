@@ -1,0 +1,274 @@
+/* ==========================================================================
+   Quintal — camada estrutural (carregada por último).
+   Aplica a identidade em todos os temas: colunas encostadas separadas por linhas
+   finas (em vez de cartões flutuantes), destaque sólido com texto escuro (contraste
+   AA sobre terracota), sem degradês, sem brilho e sem efeito de vidro.
+   ========================================================================== */
+
+/* Nenhum tema usa degradê ou brilho no destaque. */
+:root,
+[data-theme] {
+  --accent-gradient: var(--accent-primary);
+  --accent-glow: transparent;
+}
+
+/* Sem efeito de vidro em lugar nenhum. */
+*,
+*::before,
+*::after {
+  -webkit-backdrop-filter: none !important;
+  backdrop-filter: none !important;
+}
+
+#root { background: var(--bg-app); }
+
+/* --- Moldura do app: barra de título, trilho de servidores e colunas --------- */
+
+.titlebar {
+  background: var(--bg-app);
+  border-bottom: 1px solid var(--border-color);
+}
+.titlebar-brand span { letter-spacing: 0.14em; font-weight: 700; color: var(--text-secondary); }
+.titlebar-logo { color: var(--accent-primary); }
+
+.main-layout { gap: 0; padding: 0; }
+
+.server-sidebar {
+  background: var(--bg-app);
+  border-right: 1px solid var(--border-color);
+  padding-top: 10px;
+  gap: 6px;
+}
+.server-btn {
+  width: 44px;
+  height: 44px;
+  border-radius: var(--radius-lg);
+  background: var(--bg-tertiary);
+  border: 1px solid transparent;
+  transition: background 0.15s var(--ease), color 0.15s, border-color 0.15s;
+}
+.server-btn:hover {
+  border-radius: var(--radius-lg);
+  background: var(--bg-tertiary);
+  border-color: var(--border-strong);
+  color: var(--text-primary);
+  transform: none;
+  box-shadow: none;
+}
+.server-icon-wrapper.active .server-btn {
+  border-radius: var(--radius-lg);
+  background: var(--accent-primary);
+  color: var(--text-on-accent);
+  box-shadow: none;
+}
+.server-pill { background: var(--accent-primary); width: 3px; }
+.server-divider { width: 24px; height: 1px; }
+
+.channel-sidebar,
+.chat-area,
+.member-sidebar,
+.voice-stream-view {
+  border: none;
+  border-radius: 0;
+}
+.channel-sidebar { background: var(--bg-secondary); border-right: 1px solid var(--border-color); }
+.member-sidebar { background: var(--bg-secondary); border-left: 1px solid var(--border-color); }
+.chat-area { background: var(--bg-primary); }
+.voice-stream-view { background: var(--bg-primary); }
+.chat-header { background: var(--bg-primary); height: 52px; }
+.chat-header-title { font-weight: 700; letter-spacing: -0.01em; }
+
+/* Itens de lista: seleção com barra lateral terracota em vez de bloco colorido */
+.channel-item { border-radius: var(--radius-md); }
+.channel-item.active {
+  background: var(--bg-active);
+  color: var(--text-primary);
+  box-shadow: inset 2px 0 0 var(--accent-primary);
+}
+
+/* --- Botões -------------------------------------------------------------------- */
+
+.btn { border-radius: var(--radius-md); height: 36px; font-weight: 600; letter-spacing: 0; }
+.btn:active:not(:disabled) { transform: translateY(1px); }
+.btn-primary {
+  background: var(--accent-primary);
+  color: var(--text-on-accent);
+  box-shadow: none;
+}
+.btn-primary:hover:not(:disabled) {
+  background: var(--accent-primary-hover);
+  box-shadow: none;
+  filter: none;
+}
+.btn-danger { box-shadow: none; }
+:focus-visible { outline: 2px solid var(--accent-primary); outline-offset: 2px; }
+
+/* --- Mensagens e composição ------------------------------------------------------ */
+
+.message-item { border-radius: var(--radius-md); }
+.message-item.highlighted { background: var(--bg-active); }
+.chat-input-box {
+  border-radius: var(--radius-lg);
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-color);
+}
+.chat-input-box:focus-within { border-color: var(--border-focus); box-shadow: none; }
+
+/* --- Janelas e menus ----------------------------------------------------------- */
+
+.modal-backdrop { background: var(--bg-overlay); }
+.modal-container {
+  border-radius: var(--radius-xl);
+  border: 1px solid var(--border-strong);
+  box-shadow: var(--shadow-lg);
+}
+.modal-header { border-bottom: 1px solid var(--border-color); padding-bottom: 14px; }
+.modal-title { letter-spacing: -0.01em; }
+
+/* --- Chamada ------------------------------------------------------------------- */
+
+.voice-dock {
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-xl);
+  box-shadow: var(--shadow-md);
+}
+.dock-btn { border-radius: var(--radius-md); background: var(--bg-tertiary); }
+.dock-btn:hover { transform: none; background: var(--bg-hover); }
+.dock-btn.on { background: var(--accent-primary); color: var(--text-on-accent); }
+.dock-btn.leave { background: var(--accent-danger); color: #fff; }
+.voice-tile { border-radius: var(--radius-lg); }
+.voice-tile.speaking { box-shadow: 0 0 0 2px var(--accent-success); }
+.live-badge { border-radius: var(--radius-sm); }
+
+/* Sala 3D: sobreposições sólidas, sem vidro nem cantos exagerados */
+.room3d-chip,
+.room3d-actions,
+.room3d-help,
+.room3d-help-toggle,
+.room3d-presenters,
+.room3d-theme-menu,
+.room3d-label { border-radius: var(--radius-md); }
+.room3d-chip,
+.room3d-help-toggle { background: rgba(20, 18, 16, 0.88); border-color: rgba(255, 236, 214, 0.12); }
+.room3d-actions,
+.room3d-help,
+.room3d-presenters,
+.room3d-own-note,
+.room3d-hint { background: rgba(20, 18, 16, 0.9); }
+.room3d-theme-menu { background: #1d1b18; }
+.room3d-actions .room3d-throw { background: var(--accent-primary); color: var(--text-on-accent); }
+.room3d-label { border-radius: var(--radius-full); }
+
+/* --- Login: duas colunas (marca à esquerda, formulário à direita) ----------------- */
+
+.auth-page {
+  display: grid;
+  grid-template-columns: minmax(0, 1.05fr) minmax(360px, 0.95fr);
+  align-items: stretch;
+  padding: 0;
+  background: var(--bg-app);
+}
+.auth-page::before,
+.auth-page::after { display: none; }
+
+.auth-aside {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 32px;
+  padding: 48px clamp(28px, 5vw, 64px);
+  background: #1a1411;
+  border-right: 1px solid var(--border-color);
+  overflow: hidden;
+}
+/* Faixas de entardecer no rodapé da coluna (decoração estática) */
+.auth-aside::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 34%;
+  background:
+    linear-gradient(to top, #e8783f 0 18%, transparent 18%),
+    linear-gradient(to top, #c4582a 0 36%, transparent 36%),
+    linear-gradient(to top, #8f3f22 0 56%, transparent 56%),
+    linear-gradient(to top, #4f2a1a 0 78%, transparent 78%);
+  opacity: 0.9;
+  pointer-events: none;
+}
+.auth-aside-brand { display: flex; align-items: center; gap: 12px; color: #f2ece4; position: relative; z-index: 1; }
+.auth-aside-brand svg { width: 34px; height: 34px; color: #e8783f; }
+.auth-aside-brand strong { font-size: 20px; letter-spacing: 0.16em; }
+.auth-aside h2 {
+  position: relative;
+  z-index: 1;
+  max-width: 15ch;
+  font-size: clamp(30px, 3.6vw, 46px);
+  line-height: 1.05;
+  letter-spacing: -0.03em;
+  color: #f7efe5;
+}
+.auth-aside ul {
+  position: relative;
+  z-index: 1;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  max-width: 38ch;
+  color: #cbbfb0;
+  font-size: 14px;
+  line-height: 1.5;
+  margin-bottom: 30%;
+}
+.auth-aside li { padding-left: 16px; position: relative; }
+.auth-aside li::before { content: ''; position: absolute; left: 0; top: 0.62em; width: 7px; height: 2px; background: #e8783f; }
+
+.auth-card {
+  align-self: center;
+  justify-self: center;
+  width: min(400px, calc(100% - 48px));
+  background: transparent;
+  border: none;
+  border-radius: 0;
+  box-shadow: none;
+  padding: 24px 0;
+  animation: none;
+}
+.auth-card .auth-brand { align-items: flex-start; text-align: left; }
+.auth-card .auth-logo { display: none; }
+.auth-card .auth-title { font-size: 24px; letter-spacing: -0.02em; text-transform: none; background: none; -webkit-text-fill-color: currentColor; color: var(--text-primary); }
+.auth-card .auth-subtitle { text-align: left; }
+
+@media (max-width: 860px) {
+  .auth-page { grid-template-columns: 1fr; }
+  .auth-aside { display: none; }
+}
+
+/* --- Tema claro: papel e linho ---------------------------------------------------- */
+
+[data-theme='light'] {
+  --bg-app: #e7e0d5;
+  --bg-primary: #f8f4ee;
+  --bg-secondary: #f1ebe2;
+  --bg-tertiary: #e8e0d4;
+  --bg-elevated: #fbf8f3;
+  --bg-hover: rgba(60, 40, 20, 0.05);
+  --bg-active: rgba(196, 88, 42, 0.12);
+  --bg-card: #fbf8f3;
+  --border-color: rgba(60, 40, 20, 0.1);
+  --border-strong: rgba(60, 40, 20, 0.18);
+  --text-primary: #211a14;
+  --text-secondary: #5b4f43;
+  --text-muted: #8a7d70;
+  --text-on-accent: #fff8f2;
+  --accent-primary: #c4582a;
+  --accent-primary-hover: #b04b20;
+  --accent-soft: rgba(196, 88, 42, 0.12);
+  --border-focus: #c4582a;
+  --accent-success: #3f8a55;
+  --status-online: #3f8a55;
+}

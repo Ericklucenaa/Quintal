@@ -1,6 +1,6 @@
 import React from 'react';
 import ReactDOM from 'react-dom/client';
-import '@fontsource-variable/inter';
+import '@fontsource-variable/figtree';
 import '@fontsource-variable/jetbrains-mono';
 import './styles/index.css';
 import './styles/features.css';
@@ -8,6 +8,8 @@ import './styles/voice.css';
 import './styles/v12.css';
 import './styles/themes.css';
 import './styles/appearance.css';
+import './styles/room3d.css';
+import './styles/quintal.css';
 import { applyAppearance } from './services/appearance';
 
 // Apply the saved theme, accent and chat background before the first paint.

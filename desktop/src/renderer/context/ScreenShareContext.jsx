@@ -5,6 +5,7 @@ import { useServer } from './ServerContext';
 import { useNotification } from './NotificationContext';
 import { sendScreenSignal, listenToScreenSignals } from '../services/cloud/voice';
 import { getIceServers } from '../services/iceServers';
+import { playAppSound } from '../services/soundEffects';
 import { logWarn, quietly } from '../services/log';
 
 const ScreenShareContext = createContext(null);
@@ -59,6 +60,23 @@ export function ScreenShareProvider({ children }) {
   channelRef.current = activeVoiceChannel;
 
   const presenters = useMemo(() => voiceUsers.filter((u) => u.isScreenSharing), [voiceUsers]);
+
+  // Sons de transmissão: alguém (inclusive eu) começou ou parou de transmitir.
+  // A primeira leitura de cada sala só registra quem já transmitia, sem tocar nada.
+  const presenterKey = presenters.map((p) => p.userId).sort().join(',');
+  const prevPresentersRef = useRef({ channelId: null, ids: new Set() });
+  useEffect(() => {
+    const channelId = activeVoiceChannel?.id || null;
+    const ids = new Set(presenterKey ? presenterKey.split(',') : []);
+    const prev = prevPresentersRef.current;
+    if (channelId && prev.channelId === channelId) {
+      const started = [...ids].some((id) => !prev.ids.has(id));
+      const stopped = [...prev.ids].some((id) => !ids.has(id));
+      if (started) playAppSound('screen-start');
+      else if (stopped) playAppSound('screen-stop');
+    }
+    prevPresentersRef.current = { channelId, ids };
+  }, [presenterKey, activeVoiceChannel?.id]);
 
   // Presenting and watching are independent: `showingLocal` only decides
   // which of the two is on screen.

@@ -435,7 +435,7 @@ const SOUNDS = [
   } },
 
   // --- Alertas & ambiente --------------------------------------------------
-  { id: 'notification', name: 'Ping Concord', emoji: '🔔', color: '#6366f1', category: 'alerts', play: (v) => {
+  { id: 'notification', name: 'Ping Quintal', emoji: '🔔', color: '#6366f1', category: 'alerts', play: (v) => {
     v.tone({ freq: 587.33, to: 880, d: 0.25, g: 0.25, slide: 0.08 });
   } },
   { id: 'doorbell', name: 'Campainha', emoji: '🚪', color: '#0891b2', category: 'alerts', play: (v) => {
@@ -535,3 +535,89 @@ class SoundBoardSynthesizer {
 }
 
 export const soundSynthesizer = new SoundBoardSynthesizer();
+
+// ---------------------------------------------------------------------------
+// Sons do app (não fazem parte do soundboard): entrar e sair da chamada,
+// transmissão de tela e ações da sala 3D. Cada evento tem um som próprio.
+// ---------------------------------------------------------------------------
+
+const APP_SOUNDS_KEY = 'concord_app_sounds';
+
+const APP_SOUNDS = {
+  // Você entrou na chamada: arpejo quente subindo.
+  'voice-join-self': (v) => v.seq([['C5', 0, 0.16], ['E5', 0.09, 0.16], ['G5', 0.18, 0.3]], { type: 'sine', g: 0.16 }),
+  // Alguém entrou: dois toques brilhantes para cima.
+  'voice-user-join': (v) => {
+    v.tone({ freq: f('G5'), d: 0.12, type: 'triangle', g: 0.15 });
+    v.tone({ freq: f('D6'), t: 0.1, d: 0.22, type: 'triangle', g: 0.15 });
+  },
+  // Alguém saiu: dois toques suaves para baixo.
+  'voice-user-leave': (v) => {
+    v.tone({ freq: f('D5'), d: 0.12, type: 'triangle', g: 0.13 });
+    v.tone({ freq: f('A4'), t: 0.11, d: 0.24, type: 'triangle', g: 0.13 });
+  },
+  // Você saiu: três notas descendo, mais graves.
+  'voice-leave-self': (v) => v.seq([['G4', 0, 0.14], ['E4', 0.11, 0.14], ['C4', 0.22, 0.32]], { type: 'sine', g: 0.16 }),
+  // Transmissão começou: varredura subindo e um sino.
+  'screen-start': (v) => {
+    v.noise({ d: 0.35, g: 0.08, freq: 400, to: 3200, q: 3, attack: 0.05 });
+    v.bell('E6', 0.28, 0.9, 0.08, [1, 2.4, 3.9]);
+  },
+  // Transmissão parou: varredura descendo e um baque leve.
+  'screen-stop': (v) => {
+    v.noise({ d: 0.35, g: 0.08, freq: 2800, to: 300, q: 3, attack: 0.02 });
+    v.tone({ freq: 160, to: 90, t: 0.25, d: 0.22, g: 0.18, slide: 0.15 });
+  },
+  'room-jump': (v) => v.tone({ freq: 280, to: 720, d: 0.16, type: 'sine', g: 0.12, slide: 0.12 }),
+  'room-land': (v) => v.noise({ d: 0.12, g: 0.22, type: 'lowpass', freq: 400, attack: 0.002 }),
+  'room-pick': (v) => v.tone({ freq: 620, to: 980, d: 0.08, type: 'sine', g: 0.13, slide: 0.05 }),
+  'room-throw': (v) => v.noise({ d: 0.22, g: 0.14, freq: 700, to: 2600, q: 2, attack: 0.01 }),
+  'room-hit': (v) => {
+    v.tone({ freq: 190, to: 95, d: 0.18, type: 'square', g: 0.07, slide: 0.12 });
+    v.noise({ d: 0.07, g: 0.25, type: 'lowpass', freq: 900, attack: 0.001 });
+    v.tone({ freq: 520, t: 0.1, d: 0.45, type: 'sine', g: 0.08, vibrato: { rate: 14, depth: 40 } });
+  },
+  'room-theme': (v) => {
+    for (let i = 0; i < 8; i++) v.tone({ freq: rand(1400, 3600), t: i * 0.045, d: 0.25, g: 0.04, attack: 0.002 });
+  }
+};
+
+export const APP_SOUND_IDS = Object.keys(APP_SOUNDS);
+
+export function appSoundsEnabled() {
+  try {
+    return localStorage.getItem(APP_SOUNDS_KEY) !== 'false';
+  } catch {
+    return true;
+  }
+}
+
+export function setAppSoundsEnabled(on) {
+  try {
+    localStorage.setItem(APP_SOUNDS_KEY, String(Boolean(on)));
+  } catch {
+    // ignore
+  }
+}
+
+/** Toca um som do app (volume 0..1). Silencioso se os sons do app estiverem desligados. */
+export function playAppSound(id, volume = 0.6) {
+  const play = APP_SOUNDS[id];
+  if (!play || volume <= 0 || !appSoundsEnabled()) return;
+  if (typeof window !== 'undefined') {
+    const log = (window.__appSoundLog ||= []);
+    log.push(id);
+    if (log.length > 200) log.shift();
+  }
+  const ctx = soundSynthesizer.getAudioContext();
+  if (!ctx) return;
+  const master = ctx.createGain();
+  master.gain.value = Math.min(1, volume);
+  master.connect(ctx.destination);
+  try {
+    play(new Voice(ctx, master));
+  } catch (err) {
+    console.warn('app sound', id, err);
+  }
+  setTimeout(() => master.disconnect(), 3000);
+}

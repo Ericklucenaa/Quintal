@@ -1,9 +1,11 @@
-# Concord
+# Quintal
+
+> Antes chamado **Concord**. O nome mudou para ter identidade própria; veja "Nomes internos" abaixo.
 
 Aplicativo de comunicação para Windows (e web) com chat de texto em tempo real, mensagens diretas, salas de voz e transmissão de tela.
 
 - **Web:** https://concord-3af70.web.app
-- **Instalador Windows:** [Releases](https://github.com/Ericklucenaa/Concord/releases/latest)
+- **Instalador Windows:** [Releases](https://github.com/Ericklucenaa/Quintal/releases/latest)
 
 ## Funcionalidades
 
@@ -25,6 +27,16 @@ Aplicativo de comunicação para Windows (e web) com chat de texto em tempo real
 - **v1.2:** atalhos globais configuráveis, overlay nos jogos, janela que lembra tamanho/posição/monitor, envio de mensagens offline com reenvio
 - **v1.2:** convites com validade e limite de usos, privacidade de DM (só amigos), verificação de e-mail, exportar dados e excluir conta (LGPD), CSP, relatórios de erro
 
+- **v1.3 (Sala 3D):** canais de voz podem virar uma sala 3D onde cada pessoa anda como avatar:
+  - **Movimento:** andar (WASD), correr (Shift), pular (Espaço), subir em mesa, sofá e balcão, e sentar (`E`) no sofá, na fogueira ou no balcão.
+  - **Objetos:** pegar e soltar (`F`), arremessar (`G` ou clique) e acertar os outros, que cambaleiam, ficam tontos e são empurrados. Cada ação tem animação e som.
+  - **Gestos e reações:** gestos (`1` a `3`) e reações com emoji.
+  - **6 temas:** Terraço ao entardecer, Luau na praia, Chalé na neve, Base lunar (com gravidade baixa), Acampamento na floresta e Telhado na chuva. O tema muda para todos na sala.
+  - **TV:** mostra a transmissão de tela, inclusive a sua.
+  - **Áudio espacial:** deixa mais alto quem está perto.
+  - **Sincronização e segurança:** posições, objetos e temas viajam pelo próprio WebRTC da chamada (canal de dados, sem custo no Firebase), e toda mensagem recebida é validada.
+- **Sons da chamada:** sons diferentes para você entrar, alguém entrar, alguém sair, você sair, e para uma transmissão começar ou parar. Dá para desligar em Configurações.
+
 ## Arquitetura
 
 ```text
@@ -34,13 +46,27 @@ desktop/
   src/renderer/
     context/       Estado da aplicação (auth, servidores, DMs, presença, não lidas, voz, tela)
     services/cloud Acesso ao Firestore, separado por domínio
-    components/    Interface (chat compartilhado em components/chat)
+    components/    Interface (chat compartilhado em components/chat; sala 3D em components/room3d)
+    services/room3d Regras puras da sala 3D: layout, movimento, protocolo validado e áudio espacial
   tests/           Testes das regras de segurança e da camada de dados (emuladores do Firebase)
 firestore.rules    Regras de segurança — a única barreira entre clientes e os dados
 scripts/           Migração de dados e publicação de versões (credenciais de administrador)
 ```
 
 Todos os dados ficam no **Firebase** (Auth + Firestore). Não existe servidor próprio: a sinalização WebRTC também passa pelo Firestore. As permissões são garantidas pelas regras em `firestore.rules`, e o cliente apenas espelha essas regras para decidir o que mostrar.
+
+### Nomes internos (mantidos de propósito)
+
+O app se chama Quintal, mas alguns identificadores continuam com o nome antigo porque mudá-los quebraria dados ou instalações:
+
+| Identificador | Por que fica |
+|---|---|
+| Projeto e domínio do Firebase (`concord-3af70`) | Não podem ser renomeados; todas as contas e mensagens estão lá |
+| Coleções do Firestore e chaves locais (`concord_*`) | Renomear apagaria dados e preferências de todos |
+| `appId` do instalador (`com.concord.app`) | A versão nova atualiza a instalada em vez de criar um segundo app |
+| Pasta de dados do Electron (`%APPDATA%\Concord`) | O app instalado continua usando a pasta existente: ninguém perde o login |
+| Espelho `Ericklucenaa/Concord` | O projeto está em `Ericklucenaa/Quintal`, mas o atualizador das versões até 1.2.x só aceita downloads de `Ericklucenaa/Concord`; por isso cada release também é publicada nesse espelho |
+| Links `concord://` | Continuam funcionando; os novos usam `quintal://` |
 
 ## Desenvolvimento
 
@@ -60,6 +86,15 @@ npm run lint             # ESLint
 npm run build            # build de produção
 npm run test:unit        # testes unitários (sem emuladores)
 npm run test:emulators   # regras de segurança + camada de dados nos emuladores do Firebase
+npm run test:e2e         # chamada real em 3 janelas Electron (voz, tela, câmera, DM)
+npm run test:e2e:room3d  # sala 3D em 2 janelas: sincronização, áudio espacial, TV, segurança
+```
+
+Os testes de ponta a ponta precisam do Firebase CLI e de Java 11 ou mais novo. `SHOT_DIR=<pasta>` salva capturas da sala 3D e `E2E_VERBOSE=1` mostra toda a saída do Electron.
+
+O npm 11 só roda scripts de instalação aprovados: a lista fica em `allowScripts` no `desktop/package.json` (Electron, esbuild, Firebase, protobufjs e uiohook). Sem isso, o binário do Electron não é baixado.
+
+```bash
 ```
 
 O CI (GitHub Actions) roda lint, build e testes em todo push e PR. Em `main`, também publica a versão web no Firebase Hosting.
@@ -93,7 +128,7 @@ Dados efêmeros (sinalização de voz/tela, "digitando…", soundboard) são apa
 
 ```bash
 firebase deploy --only firestore          # regras e índices
-cd desktop && npm run dist:win            # gera dist-electron/Concord-Setup-<versão>.exe
+cd desktop && npm run dist:win            # gera dist-electron/Quintal-Setup-<versão>.exe
 cd .. && node scripts/publish-release.mjs "Notas da versão"
 firebase deploy --only hosting
 ```
@@ -102,7 +137,7 @@ firebase deploy --only hosting
 
 ## Apoie o projeto
 
-O Concord é grátis. Se ele for útil para você, qualquer valor ajuda a manter o projeto:
+O Quintal é grátis. Se ele for útil para você, qualquer valor ajuda a manter o projeto:
 
 [![Apoie no Ko-fi](https://ko-fi.com/img/githubbutton_sm.svg)](https://ko-fi.com/ericklucena)
 

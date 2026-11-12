@@ -28,7 +28,7 @@ function waitForUrl(url, timeoutMs = 30000) {
   });
 }
 
-console.log('Iniciando Concord (dev)...');
+console.log('Iniciando Quintal (dev)...');
 
 const vite = spawn(npxCmd, ['vite'], { cwd: desktopDir, stdio: 'inherit', shell: true });
 

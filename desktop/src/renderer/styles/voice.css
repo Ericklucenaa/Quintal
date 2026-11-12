@@ -165,7 +165,7 @@
 .channel-item.unread::before { left: -6px; width: 3px; height: 8px; border-radius: 3px; }
 .reaction-pill { border-radius: var(--radius-full); padding: 3px 9px; transition: transform 0.1s var(--ease), background 0.15s; }
 .reaction-pill:hover { transform: translateY(-1px); border-color: var(--border-strong); }
-.reaction-pill.mine { background: var(--accent-soft); border-color: rgba(124, 108, 255, 0.5); }
+.reaction-pill.mine { background: var(--accent-soft); border-color: color-mix(in srgb, var(--accent-primary) 50%, transparent); }
 .message-toolbar { border-radius: 12px; padding: 3px; box-shadow: var(--shadow-md); background: var(--bg-elevated); border-color: var(--border-strong); }
 .day-separator span { padding: 2px 10px; border-radius: var(--radius-full); background: var(--bg-tertiary); border: 1px solid var(--border-color); }
 .md-mention { border-radius: 5px; padding: 0 3px; }

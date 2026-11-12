@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { Radio, Mic, Keyboard } from 'lucide-react';
 import { useSettings } from '../../services/settings';
 import { requestNotificationPermission } from '../../services/notificationService';
+import { appSoundsEnabled, setAppSoundsEnabled, playAppSound } from '../../services/soundEffects';
 
 const isElectron = typeof window !== 'undefined' && Boolean(window.electronAPI?.isElectron);
 
@@ -77,8 +78,8 @@ export function VoiceModeSettings() {
             </button>
             <div className="hint">
               {isElectron
-                ? 'Funciona mesmo com o Concord em segundo plano (ex.: durante um jogo).'
-                : 'No navegador, o atalho só funciona com a aba do Concord em foco. Use o app de desktop para um atalho global.'}
+                ? 'Funciona mesmo com o Quintal em segundo plano (ex.: durante um jogo).'
+                : 'No navegador, o atalho só funciona com a aba do Quintal em foco. Use o app de desktop para um atalho global.'}
             </div>
           </div>
           <div>
@@ -140,6 +141,7 @@ export function AppSettingsPanel() {
           onChange={(v) => update({ notificationSounds: v })}
           title="Som de notificação"
         />
+        <AppSoundsToggle />
         <div className="hint">No status "Não perturbe" nenhuma notificação é exibida.</div>
       </div>
 
@@ -149,14 +151,14 @@ export function AppSettingsPanel() {
           checked={settings.closeToTray}
           onChange={(v) => update({ closeToTray: v })}
           title="Minimizar para a bandeja ao fechar"
-          description="O Concord continua rodando (voz e notificações) ao clicar no X."
+          description="O Quintal continua rodando (voz e notificações) ao clicar no X."
           disabled={!isElectron}
         />
         <Toggle
           checked={settings.launchAtStartup}
           onChange={(v) => update({ launchAtStartup: v })}
           title="Iniciar com o Windows"
-          description="Abre o Concord minimizado quando você liga o computador."
+          description="Abre o Quintal minimizado quando você liga o computador."
           disabled={!isElectron}
         />
         <Toggle
@@ -189,5 +191,22 @@ export function AppSettingsPanel() {
         </div>
       </div>
     </div>
+  );
+}
+
+/** Sons de entrar e sair da chamada, de transmissão e da sala 3D. */
+function AppSoundsToggle() {
+  const [on, setOn] = useState(appSoundsEnabled);
+  return (
+    <Toggle
+      checked={on}
+      onChange={(v) => {
+        setAppSoundsEnabled(v);
+        setOn(v);
+        if (v) playAppSound('voice-user-join');
+      }}
+      title="Sons da chamada"
+      description="Avisos sonoros diferentes quando alguém entra, sai ou começa e para de transmitir a tela, e os sons da sala 3D."
+    />
   );
 }

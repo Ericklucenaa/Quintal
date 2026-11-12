@@ -1,8 +1,8 @@
-// Runs tests/e2e/call.cjs: starts Vite against the Firebase emulators and
+// Runs tests/e2e/call.cjs (or E2E_SPEC, e.g. room3d.cjs): starts Vite against the Firebase emulators and
 // drives three real Electron windows. Use through `npm run test:e2e`
 // (which wraps this in `firebase emulators:exec`). Windows/desktop only:
 // the screen-share checks capture the real screen.
-import { spawn } from 'child_process';
+import { spawn, spawnSync } from 'child_process';
 import path from 'path';
 import { fileURLToPath } from 'url';
 
@@ -11,7 +11,14 @@ const env = { ...process.env, VITE_FIREBASE_EMULATOR: '1' };
 delete env.ELECTRON_RUN_AS_NODE;
 
 const vite = spawn('npx', ['vite', '--port', '5173', '--strictPort'], { cwd: desktop, env, shell: true, stdio: 'ignore' });
-const stop = () => { try { vite.kill(); } catch { /* already gone */ } };
+// No Windows, kill() encerra só o shell e deixa o Vite órfão na porta 5173:
+// encerra a árvore de processos que este script criou.
+const stop = () => {
+  try {
+    if (process.platform === 'win32') spawnSync('taskkill', ['/pid', String(vite.pid), '/T', '/F'], { stdio: 'ignore' });
+    else vite.kill();
+  } catch { /* already gone */ }
+};
 
 let ready = false;
 for (let i = 0; i < 60 && !ready; i++) {
@@ -24,7 +31,8 @@ if (!ready) {
   process.exit(1);
 }
 
-const electron = spawn('npx', ['electron', path.join(desktop, 'tests/e2e/call.cjs')], {
+const spec = process.env.E2E_SPEC || 'call.cjs';
+const electron = spawn('npx', ['electron', path.join(desktop, 'tests/e2e', spec)], {
   cwd: desktop,
   env: { ...env, CONCORD_MAIN: path.join(desktop, 'src/main/index.cjs') },
   shell: true

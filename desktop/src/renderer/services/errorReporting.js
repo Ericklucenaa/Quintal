@@ -9,7 +9,7 @@ const sent = new Set();
 let count = 0;
 
 function appVersion() {
-  return typeof window !== 'undefined' && window.__CONCORD_VERSION__ ? window.__CONCORD_VERSION__ : 'web';
+  return typeof window !== 'undefined' && window.__APP_VERSION__ ? window.__APP_VERSION__ : 'web';
 }
 
 export function reportError(error, context = '') {

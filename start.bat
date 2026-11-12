@@ -1,5 +1,5 @@
 @echo off
 cd /d "%~dp0"
-title Concord - Desktop
+title Quintal - Desktop
 node dev.js
 pause

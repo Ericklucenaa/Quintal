@@ -255,7 +255,7 @@ export function VoiceExtras() {
 
       <div className="settings-card">
         <div className="settings-card-title">Atalhos globais</div>
-        <div className="hint">Funcionam mesmo com o Concord em segundo plano (app de desktop).</div>
+        <div className="hint">Funcionam mesmo com o Quintal em segundo plano (app de desktop).</div>
         <ShortcutField label="Silenciar / ativar microfone" value={settings.muteShortcut} onChange={(v) => update({ muteShortcut: v })} />
         <ShortcutField label="Ensurdecer / ativar áudio" value={settings.deafenShortcut} onChange={(v) => update({ deafenShortcut: v })} />
       </div>
