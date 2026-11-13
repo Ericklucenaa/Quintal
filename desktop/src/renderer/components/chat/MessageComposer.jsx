@@ -84,7 +84,8 @@ const MessageComposer = forwardRef(function MessageComposer(
     onEditLast,
     onError,
     onCreatePoll,
-    uploadProgress
+    uploadProgress,
+    commands = []
   },
   ref
 ) {
@@ -94,6 +95,7 @@ const MessageComposer = forwardRef(function MessageComposer(
   const [gifOpen, setGifOpen] = useState(false);
   const [mention, setMention] = useState(null); // { query, start }
   const [mentionIndex, setMentionIndex] = useState(0);
+  const [commandIndex, setCommandIndex] = useState(0);
   const [sending, setSending] = useState(false);
   const textareaRef = useRef(null);
   const fileInputRef = useRef(null);
@@ -165,6 +167,27 @@ const MessageComposer = forwardRef(function MessageComposer(
     return list;
   }, [mention, members, allowEveryone]);
 
+  // Comandos dos bots: sugestões enquanto a mensagem é só "/algo".
+  const commandQuery = useMemo(() => {
+    const m = text.match(/^\/([a-zçãé]*)$/i);
+    return m ? m[1].toLowerCase() : null;
+  }, [text]);
+  const commandSuggestions = useMemo(() => {
+    if (commandQuery === null || !commands.length) return [];
+    return commands.filter((c) => c.name.startsWith(commandQuery)).slice(0, 8);
+  }, [commandQuery, commands]);
+  useEffect(() => setCommandIndex(0), [commandQuery]);
+
+  const applyCommand = (c) => {
+    setText(`/${c.name}${c.args ? ' ' : ''}`);
+    requestAnimationFrame(() => {
+      const el = textareaRef.current;
+      el?.focus();
+      const pos = el?.value.length ?? 0;
+      el?.setSelectionRange(pos, pos);
+    });
+  };
+
   const updateMentionState = (value, caret) => {
     const match = value.slice(0, caret).match(MENTION_QUERY);
     if (match) {
@@ -215,6 +238,24 @@ const MessageComposer = forwardRef(function MessageComposer(
   };
 
   const onKeyDown = (e) => {
+    if (commandSuggestions.length > 0) {
+      const exact = commandSuggestions.length === 1 && commandSuggestions[0].name === commandQuery && !commandSuggestions[0].args;
+      if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        setCommandIndex((i) => (i + 1) % commandSuggestions.length);
+        return;
+      }
+      if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        setCommandIndex((i) => (i - 1 + commandSuggestions.length) % commandSuggestions.length);
+        return;
+      }
+      if (e.key === 'Tab' || (e.key === 'Enter' && !e.shiftKey && !exact)) {
+        e.preventDefault();
+        applyCommand(commandSuggestions[commandIndex] || commandSuggestions[0]);
+        return;
+      }
+    }
     if (mention && suggestions.length > 0) {
       if (e.key === 'ArrowDown') {
         e.preventDefault();
@@ -272,6 +313,29 @@ const MessageComposer = forwardRef(function MessageComposer(
 
   return (
     <div className="chat-input-container" style={{ position: 'relative' }}>
+      {commandSuggestions.length > 0 && (
+        <div className="mention-popup command-popup" role="listbox" aria-label="Comandos dos bots">
+          <div className="mention-popup-title">Comandos</div>
+          {commandSuggestions.map((c, i) => (
+            <button
+              key={c.name}
+              role="option"
+              aria-selected={i === commandIndex}
+              className={`mention-option command-option ${i === commandIndex ? 'active' : ''}`}
+              onMouseDown={(e) => {
+                e.preventDefault();
+                applyCommand(c);
+              }}
+            >
+              {c.botAvatar ? <img src={c.botAvatar} alt="" /> : <span className="mention-everyone">/</span>}
+              <span className="command-name">/{c.name}{c.args && <em> {c.args}</em>}</span>
+              <span className="command-help">{c.help}</span>
+              {c.botName && <span className="command-bot">{c.botName}</span>}
+            </button>
+          ))}
+        </div>
+      )}
+
       {mention && suggestions.length > 0 && (
         <div className="mention-popup">
           <div className="mention-popup-title">Membros</div>

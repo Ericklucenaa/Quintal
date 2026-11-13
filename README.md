@@ -37,6 +37,19 @@ Aplicativo de comunicação para Windows (e web) com chat de texto em tempo real
   - **Sincronização e segurança:** posições, objetos e temas viajam pelo próprio WebRTC da chamada (canal de dados, sem custo no Firebase), e toda mensagem recebida é validada.
 - **Sons da chamada:** sons diferentes para você entrar, alguém entrar, alguém sair, você sair, e para uma transmissão começar ou parar. Dá para desligar em Configurações.
 
+- **v1.4 (Bots e Bar do Quintal):**
+  - **Bots nativos:** o admin adiciona pelo menu do servidor › Bots. Não precisam de servidor próprio nem de token.
+    - **Vitrola:** fila de músicas por canal de voz. Aceita links e playlists do YouTube e do Spotify. Cada pessoa ouve pelo player oficial, sincronizado com os outros.
+    - **Porteiro:** dá boas-vindas a quem entra no servidor.
+    - **Guarda:** barra palavras proibidas, links e excesso de menções, e o bloqueio também vale nas regras do servidor.
+    - **Sorte:** `/dado`, `/moeda`, `/escolher` e `/sortear`.
+    - **Comandos `/` no chat:** com sugestões, e as mensagens de bot mostram "via @quem pediu".
+  - **Permissões por cargo:** Configurações do servidor › Permissões. Define o que moderadores e membros podem fazer (gerenciar e usar bots, pedir e controlar músicas, mudar o tema da sala, puxar ações coletivas). As regras do Firestore conferem tudo.
+  - **Bar do Quintal (sala 3D maior, 32 × 26 m):** cinema com telão, balcão com banquetas e prateleiras, pista de dança que acende com a música, vitrola, lounge e fogueira. Cabem 24 pessoas chegando juntas.
+  - **Jogos nas mesas:** xadrez e damas (regra brasileira), sinuca (bola 8, física determinística), ping-pong e totó em tempo real. Quem chega perto assiste em 3D.
+  - **Ações coletivas** (menu Juntos e tecla `J`): dança coletiva sincronizada, brinde, ola, trenzinho e foto em grupo (com download).
+  - **Avatares:** corpo masculino, feminino ou neutro, formatos de rosto, sobrancelhas, maquiagem, brincos, 18 cabelos, 16 partes de cima, 9 de baixo, 10 calçados, mais cores e 25 estilos prontos.
+
 ## Arquitetura
 
 ```text
@@ -88,7 +101,11 @@ npm run test:unit        # testes unitários (sem emuladores)
 npm run test:emulators   # regras de segurança + camada de dados nos emuladores do Firebase
 npm run test:e2e         # chamada real em 3 janelas Electron (voz, tela, câmera, DM)
 npm run test:e2e:room3d  # sala 3D em 2 janelas: sincronização, áudio espacial, TV, segurança
+# bots, permissões, Bar do Quintal, jogos, ações coletivas e Vitrola em 2 janelas:
+E2E_SPEC=bar.cjs npm run test:e2e
 ```
+
+A Vitrola usa a página `music-player.html`, hospedada no Firebase Hosting, porque o YouTube não aceita players em páginas `file://`. Depois de mudar essa página, publique o Hosting.
 
 Os testes de ponta a ponta precisam do Firebase CLI e de Java 11 ou mais novo. `SHOT_DIR=<pasta>` salva capturas da sala 3D e `E2E_VERBOSE=1` mostra toda a saída do Electron.
 

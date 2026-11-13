@@ -3,6 +3,8 @@ import { AuthProvider, useAuth } from './context/AuthContext';
 import { ServerProvider, useServer } from './context/ServerContext';
 import { VoiceProvider, useVoice } from './context/VoiceContext';
 import { ScreenShareProvider, useScreenShare } from './context/ScreenShareContext';
+import { MusicProvider } from './context/MusicContext';
+import MusicDock from './components/bots/MusicDock';
 import { NotificationProvider, useNotification } from './context/NotificationContext';
 import { DMProvider } from './context/DMContext';
 import { PresenceProvider } from './context/PresenceContext';
@@ -249,6 +251,9 @@ function MainAppContent() {
 
       <MiniStreamPlayer />
       <IncomingCallBanner />
+      <ErrorBoundary>
+        <MusicDock />
+      </ErrorBoundary>
 
       <ErrorBoundary>
         <CreateServerModal />
@@ -281,6 +286,7 @@ export default function App() {
               <UnreadProvider>
                 <VoiceProvider>
                   <ScreenShareProvider>
+                    <MusicProvider>
                     <OverlayUIProvider>
                     <div className="app-container">
                       <TitleBar />
@@ -289,6 +295,7 @@ export default function App() {
                       </div>
                     </div>
                     </OverlayUIProvider>
+                    </MusicProvider>
                   </ScreenShareProvider>
                 </VoiceProvider>
               </UnreadProvider>

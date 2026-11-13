@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, desktopCapturer, shell, Tray, Menu, nativeImage, screen } = require('electron');
+const { app, BrowserWindow, ipcMain, desktopCapturer, shell, Tray, Menu, nativeImage, screen, net: electronNet } = require('electron');
 const path = require('path');
 const https = require('https');
 const fs = require('fs');
@@ -103,6 +103,15 @@ function trackWindowState(win) {
   ['resize', 'move', 'maximize', 'unmaximize'].forEach((evt) => win.on(evt, save));
 }
 
+function isMusicLogin(url) {
+  try {
+    const u = new URL(url);
+    return u.protocol === 'https:' && ['accounts.spotify.com', 'open.spotify.com', 'challenge.spotify.com'].includes(u.hostname);
+  } catch {
+    return false;
+  }
+}
+
 function createWindow() {
   const saved = loadWindowState();
   mainWindow = new BrowserWindow({
@@ -137,6 +146,20 @@ function createWindow() {
 
   // External links open in the default browser; nothing opens inside the app.
   mainWindow.webContents.setWindowOpenHandler(({ url }) => {
+    // Entrar no Spotify (pelo player da Vitrola) acontece numa janela do próprio app,
+    // na mesma sessão, para o player tocar a faixa inteira em vez da prévia.
+    if (isMusicLogin(url)) {
+      return {
+        action: 'allow',
+        overrideBrowserWindowOptions: {
+          width: 480,
+          height: 720,
+          autoHideMenuBar: true,
+          parent: mainWindow,
+          webPreferences: { partition: 'persist:concord', sandbox: true, contextIsolation: true, nodeIntegration: false }
+        }
+      };
+    }
     if (url.startsWith('http:') || url.startsWith('https:')) shell.openExternal(url);
     return { action: 'deny' };
   });
@@ -619,6 +642,124 @@ ipcMain.handle('link:preview', async (_event, url) => {
     previewCache.set(url, null);
     return null;
   }
+});
+
+// ---------------------------------------------------------------------------
+// Vitrola: lê títulos, durações, playlists e álbuns do YouTube e do Spotify.
+// Só leitura de páginas públicas; nenhuma faixa é baixada. O áudio toca nos players
+// oficiais (music-player.html) dentro do app.
+// ---------------------------------------------------------------------------
+
+const MUSIC_UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0 Safari/537.36';
+const MUSIC_MAX_ITEMS = 100;
+const musicCache = new Map();
+
+async function fetchPublicText(url, maxBytes = 6 * 1024 * 1024) {
+  const res = await electronNet.fetch(url, { headers: { 'User-Agent': MUSIC_UA, 'Accept-Language': 'pt-BR,pt;q=0.9,en;q=0.8' }, redirect: 'follow' });
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  const text = await res.text();
+  return text.length > maxBytes ? text.slice(0, maxBytes) : text;
+}
+
+const durationFromText = (t) => {
+  const parts = String(t || '').trim().split(':').map(Number);
+  if (!parts.length || parts.some((n) => !Number.isFinite(n))) return 0;
+  return parts.reduce((acc, n) => acc * 60 + n, 0) * 1000;
+};
+
+function walkJson(node, visit, depth = 0) {
+  if (!node || typeof node !== 'object' || depth > 60) return;
+  if (Array.isArray(node)) {
+    node.forEach((v) => walkJson(v, visit, depth + 1));
+    return;
+  }
+  for (const [k, v] of Object.entries(node)) {
+    visit(k, v);
+    walkJson(v, visit, depth + 1);
+  }
+}
+
+async function youtubeVideo(id) {
+  let data = {};
+  try {
+    const res = await electronNet.fetch(`https://www.youtube.com/oembed?format=json&url=${encodeURIComponent(`https://www.youtube.com/watch?v=${id}`)}`, { headers: { 'User-Agent': MUSIC_UA } });
+    if (res.ok) data = await res.json();
+  } catch {
+    // sem título: o player completa quando a faixa tocar
+  }
+  return { kind: 'youtube', ref: id, title: data.title || '', artist: data.author_name || '', thumb: `https://i.ytimg.com/vi/${id}/hqdefault.jpg`, durationMs: 0 };
+}
+
+async function youtubePlaylist(list) {
+  const html = await fetchPublicText(`https://www.youtube.com/playlist?list=${encodeURIComponent(list)}&hl=pt-BR`);
+  const m = html.match(/var ytInitialData = (\{.*?\});<\/script>/s);
+  if (!m) return [];
+  const data = JSON.parse(m[1]);
+  const items = [];
+  const seen = new Set();
+  const push = (id, title, durationMs) => {
+    if (!/^[\w-]{11}$/.test(id || '') || seen.has(id) || items.length >= MUSIC_MAX_ITEMS) return;
+    seen.add(id);
+    items.push({ kind: 'youtube', ref: id, title: title || '', artist: '', thumb: `https://i.ytimg.com/vi/${id}/hqdefault.jpg`, durationMs });
+  };
+  walkJson(data, (k, v) => {
+    if (k === 'playlistVideoRenderer' && v) {
+      push(v.videoId, v.title?.runs?.[0]?.text || v.title?.simpleText, Number(v.lengthSeconds || 0) * 1000);
+    } else if (k === 'lockupViewModel' && v && v.contentType !== 'LOCKUP_CONTENT_TYPE_PLAYLIST') {
+      let badge = '';
+      walkJson(v.contentImage, (bk, bv) => { if (bk === 'thumbnailBadgeViewModel' && !badge) badge = bv?.text || ''; });
+      push(v.contentId, v.metadata?.lockupMetadataViewModel?.title?.content, durationFromText(badge));
+    }
+  });
+  return items;
+}
+
+async function spotifyEntity(type, id) {
+  const html = await fetchPublicText(`https://open.spotify.com/embed/${type}/${id}`);
+  const m = html.match(/<script id="__NEXT_DATA__" type="application\/json">(.*?)<\/script>/s);
+  if (!m) return [];
+  const entity = JSON.parse(m[1])?.props?.pageProps?.state?.data?.entity;
+  if (!entity) return [];
+  const coverRe = /https:\/\/(?:i\.scdn\.co|image-cdn-[\w-]+\.spotifycdn\.com)\/image\/\w+/;
+  const cover = (JSON.stringify(entity.coverArt || {}).match(coverRe) || JSON.stringify(entity).match(coverRe) || [''])[0];
+  if (type === 'track' || type === 'episode') {
+    const artist = Array.isArray(entity.artists) ? entity.artists.map((a) => a.name).join(', ') : entity.subtitle || '';
+    return [{ kind: 'spotify', ref: entity.uri, title: entity.name || entity.title || '', artist, thumb: cover, durationMs: Number(entity.duration) || 0 }];
+  }
+  return (entity.trackList || [])
+    .filter((t) => t && /^spotify:(track|episode):[A-Za-z0-9]{22}$/.test(t.uri || '') && t.isPlayable !== false)
+    .slice(0, MUSIC_MAX_ITEMS)
+    .map((t) => ({ kind: 'spotify', ref: t.uri, title: t.title || '', artist: t.subtitle || '', thumb: cover, durationMs: Number(t.duration) || 0 }));
+}
+
+ipcMain.handle('music:resolve', async (_event, link) => {
+  if (!link || typeof link !== 'object') return { items: [] };
+  const { kind, type, id, list } = link;
+  const key = `${kind}:${type}:${id}:${list || ''}`;
+  if (musicCache.has(key)) return musicCache.get(key);
+  let items = [];
+  try {
+    if (kind === 'youtube') {
+      // Playlist (ou vídeo aberto dentro de uma): a playlist inteira a partir do vídeo.
+      // Mixes automáticos (RD…) não têm fim, então entram só com o vídeo.
+      if (list && /^[\w-]{10,64}$/.test(list) && !/^RD/.test(list)) {
+        items = await youtubePlaylist(list);
+        if (type === 'video' && /^[\w-]{11}$/.test(id)) {
+          const idx = items.findIndex((it) => it.ref === id);
+          if (idx > 0) items = items.slice(idx);
+          else if (idx < 0) items = [await youtubeVideo(id), ...items];
+        }
+      }
+      if (!items.length && type === 'video' && /^[\w-]{11}$/.test(id)) items = [await youtubeVideo(id)];
+    } else if (kind === 'spotify' && ['track', 'album', 'playlist', 'episode'].includes(type) && /^[A-Za-z0-9]{22}$/.test(id)) {
+      items = await spotifyEntity(type, id);
+    }
+  } catch (err) {
+    console.warn('music resolve:', err.message);
+  }
+  const result = { items };
+  if (items.length) musicCache.set(key, result);
+  return result;
 });
 
 // ---------------------------------------------------------------------------

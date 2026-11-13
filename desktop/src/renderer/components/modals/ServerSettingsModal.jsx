@@ -10,12 +10,16 @@ import {
   Save,
   Settings,
   ScrollText,
-  Ban
+  Ban,
+  Bot,
+  KeyRound
 } from 'lucide-react';
 import { useNotification } from '../../context/NotificationContext';
 import { compressImage } from '../../services/cloud/attachments';
-import { isModerator } from '../../services/permissions';
+import { isAdmin, isModerator } from '../../services/permissions';
 import { AuditLogPanel, BansPanel } from './ServerModerationPanels';
+import BotsPanel from '../bots/BotsPanel';
+import PermissionsPanel from '../bots/PermissionsPanel';
 
 export default function ServerSettingsModal() {
   const { modalState, closeModal, activeServer, updateServer, deleteServer } = useServer();
@@ -47,7 +51,7 @@ export default function ServerSettingsModal() {
   }, [activeServer?.id, modalState.serverSettings]);
 
   useEffect(() => {
-    if (modalState.serverSettings) setTab('general');
+    if (modalState.serverSettings) setTab(typeof modalState.serverSettings === 'string' ? modalState.serverSettings : 'general');
   }, [modalState.serverSettings]);
 
   if (!modalState.serverSettings || !activeServer) return null;
@@ -123,7 +127,7 @@ export default function ServerSettingsModal() {
 
   return (
     <div className="modal-backdrop" onClick={() => closeModal('serverSettings')}>
-      <div className="modal-container" style={{ width: 620 }} onClick={(e) => e.stopPropagation()}>
+      <div className="modal-container" style={{ width: 680 }} onClick={(e) => e.stopPropagation()}>
         <div className="modal-header">
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             <Settings size={20} style={{ color: 'var(--accent-primary)' }} />
@@ -135,9 +139,11 @@ export default function ServerSettingsModal() {
         </div>
 
         <div className="modal-tabs">
-          <button className={`tab-btn ${tab === 'general' ? 'active' : ''}`} onClick={() => setTab('general')}>
-            <Settings size={14} /> Geral
-          </button>
+          {isAdmin(activeServer, user?.id) && (
+            <button className={`tab-btn ${tab === 'general' ? 'active' : ''}`} onClick={() => setTab('general')}>
+              <Settings size={14} /> Geral
+            </button>
+          )}
           {isModerator(activeServer, user?.id) && (
             <button className={`tab-btn ${tab === 'audit' ? 'active' : ''}`} onClick={() => setTab('audit')}>
               <ScrollText size={14} /> Registro de moderação
@@ -146,10 +152,18 @@ export default function ServerSettingsModal() {
           <button className={`tab-btn ${tab === 'bans' ? 'active' : ''}`} onClick={() => setTab('bans')}>
             <Ban size={14} /> Banidos ({activeServer.bannedIds?.length || 0})
           </button>
+          <button className={`tab-btn ${tab === 'bots' ? 'active' : ''}`} onClick={() => setTab('bots')}>
+            <Bot size={14} /> Bots
+          </button>
+          <button className={`tab-btn ${tab === 'perms' ? 'active' : ''}`} onClick={() => setTab('perms')}>
+            <KeyRound size={14} /> Permissões
+          </button>
         </div>
 
         {tab === 'audit' && <AuditLogPanel server={activeServer} />}
         {tab === 'bans' && <BansPanel server={activeServer} />}
+        {tab === 'bots' && <BotsPanel server={activeServer} />}
+        {tab === 'perms' && <PermissionsPanel server={activeServer} />}
 
         {tab === 'general' && <>
         {error && <div className="auth-error" style={{ margin: '16px 20px 0' }}>{error}</div>}

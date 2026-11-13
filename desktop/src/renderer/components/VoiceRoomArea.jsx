@@ -22,12 +22,14 @@ import {
   Shuffle,
   Gauge,
   Box,
-  LayoutGrid
+  LayoutGrid,
+  Disc3
 } from 'lucide-react';
 import { useVoice } from '../context/VoiceContext';
 import { useScreenShare } from '../context/ScreenShareContext';
 import { useAuth } from '../context/AuthContext';
 import { useNotification } from '../context/NotificationContext';
+import { useMusic } from '../context/MusicContext';
 import SoundboardModal from './SoundboardModal';
 import { useUserMenu } from './useUserMenu';
 import TeamDrawModal from './modals/TeamDrawModal';
@@ -157,6 +159,7 @@ export default function VoiceRoomArea({ embedded = false }) {
     localStorage.setItem('concord_room3d', String(room3d));
   }, [room3d]);
   const openUserMenu = useUserMenu();
+  const music = useMusic();
 
   // What is on the stage (my capture or the stream I watch) is independent
   // of whether I am presenting.
@@ -234,6 +237,16 @@ export default function VoiceRoomArea({ embedded = false }) {
             {voiceUsers.length} {voiceUsers.length === 1 ? 'pessoa' : 'pessoas'} na sala
           </span>
         </div>
+        {music?.enabled && (
+          <button
+            className={`quality-chip vitrola-chip ${music.current ? 'playing' : ''}`}
+            onClick={() => music.setOpen(true)}
+            title={music.current ? `Tocando: ${music.current.title}` : 'Abrir a Vitrola'}
+          >
+            <Disc3 size={13} className={music.current && !music.current.paused ? 'spin-slow' : ''} />
+            {music.current ? music.current.title : 'Vitrola'}
+          </button>
+        )}
         <button
           className={`quality-chip ${connectionQuality}`}
           onClick={() => setDiagnosticsOpen((v) => !v)}

@@ -6,6 +6,7 @@ import AttachmentView from './AttachmentView';
 import EmojiPickerPopover from '../EmojiPickerPopover';
 import { PollCard } from './Polls';
 import { defaultAvatar } from '../../services/cloud/util';
+import { botById } from '../../services/bots/catalog';
 
 const QUICK_REACTIONS = ['👍', '❤️', '😂', '🔥', '🎉'];
 const INVITE_RE = /(?:https?:\/\/[^\s]+)?#invite=([a-zA-Z0-9]+)/i;
@@ -113,6 +114,8 @@ function MessageItem({
   const textWithoutInvite = invite ? content.replace(INVITE_RE, '').trim() : content;
   const url = !invite ? firstUrl(content) : null;
   const reactions = Object.entries(message.reactions || {}).filter(([, ids]) => ids?.length > 0);
+  // Mensagem de bot: aparece com o nome do bot e "via @quem acionou".
+  const bot = message.bot ? botById(message.bot) : null;
 
   if (isBlockedAuthor && !showBlocked) {
     return (
@@ -134,9 +137,9 @@ function MessageItem({
         <span className="message-hover-time" title={formatFull(message.createdAt)}>{formatTime(message.createdAt)}</span>
       ) : (
         <img
-          src={message.authorAvatar || defaultAvatar(message.authorName)}
+          src={bot ? bot.avatar : message.authorAvatar || defaultAvatar(message.authorName)}
           alt=""
-          className="message-avatar clickable"
+          className={`message-avatar clickable ${bot ? 'bot' : ''}`}
           onClick={(e) => onOpenProfile?.(message.authorId, e)}
           onContextMenu={(e) => {
             e.stopPropagation();
@@ -164,8 +167,14 @@ function MessageItem({
                 onUserContextMenu?.(e, message);
               }}
             >
-              {message.authorName}
+              {bot ? bot.name : message.authorName}
             </button>
+            {bot && <span className="bot-tag" title="Mensagem de um bot do servidor">BOT</span>}
+            {bot && (
+              <span className="message-bot-via" title={message.botCommand ? `@${message.authorName} usou ${message.botCommand}` : `acionado por @${message.authorName}`}>
+                via @{message.authorName}{message.botCommand ? ` · ${message.botCommand}` : ''}
+              </span>
+            )}
             <span className="message-time" title={formatFull(message.createdAt)}>{formatTime(message.createdAt)}</span>
             {message.pinned && <Pin size={11} className="message-pinned-icon" title="Mensagem fixada" />}
           </div>

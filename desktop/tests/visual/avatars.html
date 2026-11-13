@@ -1,0 +1,41 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><!-- Prévia dos avatares para revisão visual (servida pelo Vite em /tests/visual/avatars.html) --><style>html,body{margin:0;background:#2a2622}canvas{display:block}</style>
+</head><body>
+<script type="module">
+import * as THREE from 'three';
+import { Avatar, loadAvatarAssets, avatarAssetBase } from '/src/renderer/components/room3d/avatar.js';
+import { PRESETS, applyPreset, DEFAULT_LOOK } from '/src/renderer/services/room3d/looks.js';
+avatarAssetBase.url = '/avatars/';
+window.__avatarDebug = new URLSearchParams(location.search).get('debug') || '';
+const q = new URLSearchParams(location.search);
+const r = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true });
+r.setSize(innerWidth, innerHeight); r.outputColorSpace = THREE.SRGBColorSpace; r.toneMapping = THREE.ACESFilmicToneMapping;
+r.shadowMap.enabled = true;
+document.body.appendChild(r.domElement);
+const scene = new THREE.Scene(); scene.background = new THREE.Color('#2a2622');
+scene.add(new THREE.HemisphereLight('#fff3e0', '#40302a', 1.2));
+const sun = new THREE.DirectionalLight('#ffffff', 2.4); sun.position.set(3, 6, 5); sun.castShadow = true; scene.add(sun);
+const floor = new THREE.Mesh(new THREE.PlaneGeometry(30, 30), new THREE.MeshStandardMaterial({ color: '#5a3d2b' })); floor.rotation.x = -Math.PI / 2; floor.receiveShadow = true; scene.add(floor);
+const cam = new THREE.PerspectiveCamera(Number(q.get('fov') || 28), innerWidth / innerHeight, 0.1, 100);
+const specs = JSON.parse(q.get('specs') || '[]');
+await loadAvatarAssets();
+const list = specs.map((sp, i) => {
+  let look = sp.preset ? applyPreset({ ...DEFAULT_LOOK, ...(sp.base || {}) }, sp.preset) : { ...DEFAULT_LOOK, ...sp.look };
+  const a = new Avatar('u' + i, look);
+  a.root.position.x = (i - (specs.length - 1) / 2) * (sp.gap || 0.95);
+  a.root.rotation.y = sp.yaw ?? 0;
+  scene.add(a.root);
+  if (sp.emote) a.playEmote(sp.emote);
+  return { a, sp };
+});
+const st = (sp) => ({ moving: !!sp.moving, running: !!sp.running, seat: sp.seat ? 1 : -1, seatTop: 0.47, speaking: !!sp.speaking, airborne: !!sp.air, holding: !!sp.holding, olaDelay: 0, playing: false });
+const T = Number(q.get('t') || 1.2);
+for (let k = 0; k < Math.round(T * 30); k++) list.forEach(({ a, sp }) => a.update(1 / 30, st(sp)));
+const cy = Number(q.get('cy') || 0.95);
+cam.position.set(0, cy + Number(q.get('up') || 0.15), Number(q.get('dist') || 6.5)); cam.lookAt(0, cy, 0);
+r.render(scene, cam);
+window.__dbg = () => { const out = []; scene.traverse((o) => { if (o.isMesh && o.visible && o.name === 'Body') { const pr = r.properties.get(o.material).currentProgram; out.push({ name: o.name, type: o.material.type, hasHook: String(o.material.onBeforeCompile).includes('uHide'), prog: pr && pr.name, cacheKey: o.material.customProgramCacheKey(), attrs: Object.keys(o.geometry.attributes) }); } }); return out; };
+window.__glsl = () => { const gl = r.getContext(); return r.info.programs.map((p) => { const sh = gl.getAttachedShaders(p.program); const src = sh.map((x) => gl.getShaderSource(x)).join(' '); return { key: p.cacheKey.slice(0, 40), hide: src.includes('uHide'), regionColor: src.includes('fract(vRegion') }; }); };
+window.__vis = () => { const out = []; scene.traverse((o) => { if (o.isMesh) { let v = true; let q = o; while (q) { if (!q.visible) v = false; q = q.parent; } if (v) out.push(o.name + ':' + o.material.type + ':' + (o.material.map ? o.material.map.uuid.slice(0, 4) : '-') + ':' + (o.isSkinnedMesh ? 'S' : 'M')); } }); return out; };
+window.__done = true;
+</script></body></html>

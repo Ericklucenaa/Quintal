@@ -19,7 +19,11 @@ const ACTION_TEXT = {
   channel_create: (e) => `criou o canal ${e.targetName}`,
   channel_update: (e) => `editou o canal ${e.targetName || ''}`,
   channel_delete: (e) => `excluiu o canal ${e.targetName || ''}`,
-  server_update: (e) => `atualizou o servidor (${e.details})`
+  server_update: (e) => `atualizou o servidor (${e.details})`,
+  bot_add: (e) => `adicionou o bot ${e.targetName}`,
+  bot_remove: (e) => `removeu o bot ${e.targetName}`,
+  bot_config: (e) => `configurou o bot ${e.targetName}`,
+  permissions_update: (e) => `mudou as permissões dos cargos (${e.details})`
 };
 
 export function AuditLogPanel({ server }) {

@@ -1,4 +1,4 @@
-// Sala 3D (Terraço) de ponta a ponta, em duas janelas Electron reais (A e B) com
+// Sala 3D (Bar do Quintal) de ponta a ponta, em duas janelas Electron reais (A e B) com
 // microfones de fala e emuladores do Firebase. Verifica: abertura com WebGL,
 // troca de estado pelo canal de dados, movimento sincronizado, áudio espacial,
 // sentar e levantar, gestos, reações, TV com transmissão de tela, rejeição de
@@ -126,12 +126,12 @@ app.whenReady().then(async () => {
     check('áudio espacial: B continua ouvindo A', heard.audible >= 1, JSON.stringify(heard));
 
     // --- Sentar ------------------------------------------------------------
-    await api(A).js('window.__room3d.teleport(0, 1.0); window.__room3d.sit(); return true;');
+    await api(A).js('window.__room3d.teleport(0, -9.2); window.__room3d.sit(); return true;');
     await sleep(1200);
     const satA = await api(A).js('return window.__room3d.me()');
     const satSeen = await api(B).js(`return window.__room3d.remote()['${aId}']`);
     check('sentar: A senta e B vê A no mesmo assento', satA.seat >= 0 && satSeen.seat === satA.seat && satSeen.pose === 'sit', `A=${satA.seat} visto=${satSeen.seat}`);
-    await api(B).js('window.__room3d.teleport(2.4, 1.7); window.__room3d.setCamYaw(-Math.PI / 2); return true;');
+    await api(B).js('window.__room3d.teleport(1.8, -6.8); window.__room3d.setCamYaw(Math.PI); return true;');
     await sleep(1200);
     await shot(B, '02_A_sentado_visto_por_B');
     await api(A).js('window.__room3d.sit(); return true;');
@@ -172,7 +172,7 @@ app.whenReady().then(async () => {
     const peak = await api(B).js(`return window.__room3d.peakY('${aId}')`);
     check('pulo: A pula e B vê A no ar', ownPeak > 0.5 && peak > 0.5, `altura de A: ${ownPeak.toFixed(2)} m; vista por B: ${peak.toFixed(2)} m`);
 
-    await api(A).js(`window.__room3d.teleport(-1.6, -2.9); window.__room3d.setCamYaw(Math.PI / 2); window.__room3d.press('forward', true); return true;`);
+    await api(A).js(`window.__room3d.teleport(-1.6, -10.2); window.__room3d.setCamYaw(Math.PI / 2); window.__room3d.press('forward', true); return true;`);
     await sleep(500);
     await api(A).js(`window.__room3d.press('forward', false); return true;`);
     await sleep(900);
@@ -181,8 +181,8 @@ app.whenReady().then(async () => {
     check('subir: A sobe na mesa andando e B vê A em cima dela', Math.abs(onTable.y - 0.36) < 0.02 && Math.abs(onTableSeen.y - 0.36) < 0.05, `A y=${onTable.y.toFixed(2)} visto=${onTableSeen.y}`);
 
     // --- Pegar e arremessar em alguém -----------------------------------------
-    await api(A).js('window.__room3d.teleport(-1.0, 5.7); return true;');
-    await api(B).js('window.__room3d.teleport(1.8, 5.7); return true;');
+    await api(A).js('window.__room3d.teleport(-1.5, 3.7); return true;');
+    await api(B).js('window.__room3d.teleport(1.3, 3.7); return true;');
     await sleep(1200);
     await api(A).js('window.__room3d.grab(); return true;');
     await sleep(800);
@@ -291,7 +291,7 @@ app.whenReady().then(async () => {
     await api(B).waitFor(`window.__room3d && window.__room3d.tvMode() === 'video'`, 'B de volta à sala com a TV', 30000);
     const shareSounds = await api(B).js('return window.__appSoundLog || []');
     check('sons: B ouve o som de "transmissão começou"', shareSounds.includes('screen-start'), shareSounds.join(','));
-    await api(B).js('window.__room3d.teleport(0, 0.3); window.__room3d.setCamYaw(Math.PI); return true;');
+    await api(B).js('window.__room3d.teleport(0, -6.5); window.__room3d.setCamYaw(Math.PI); return true;');
     await sleep(2500);
     await shot(B, '04_tv_com_a_tela_de_A');
     await shot(A, '05_A_transmitindo');
@@ -317,7 +317,7 @@ app.whenReady().then(async () => {
       const m = await import('/src/renderer/services/room3d/protocol.js');
       return [m.decode('{"v":1,"t":"s","x":1e9,"z":0,"y":0,"s":999}'), m.decode('{"v":1,"t":"r","e":"<img src=x onerror=alert(1)>"}')];
     `);
-    check('segurança: posição absurda é limitada e reação fora da lista é descartada', bad[0].x === 9 && bad[0].seat === -1 && bad[1] === null, JSON.stringify(bad));
+    check('segurança: posição absurda é limitada e reação fora da lista é descartada', bad[0].x === 16 && bad[0].seat === -1 && bad[1] === null, JSON.stringify(bad));
 
     // --- Voltar ao modo clássico ---------------------------------------------
     await api(B).js(`document.querySelector('.dock-btn[title="Voltar para a visualização clássica"]').click(); return true;`);

@@ -1,14 +1,17 @@
 // Mensagens da sala 3D trocadas pelo canal de dados WebRTC da chamada.
 // Tudo que chega de outro participante é tratado como não confiável:
 // tamanho máximo, tipos conferidos, números limitados e textos de lista fechada.
-import { ROOM, SEATS, THROWABLE_IDS } from './layout';
+import { ROOM, SEATS, THROWABLE_IDS, tableById } from './layout';
+import { decodeGameMessage } from './games/net';
 import { MAX_SPEED } from './throwables';
 import { THEME_IDS } from './themes';
 import { validateLook } from './looks';
 
 export const PROTOCOL_VERSION = 1;
 export const MAX_MESSAGE_BYTES = 1024;
-export const EMOTES = ['wave', 'dance', 'cheer'];
+export const EMOTES = ['wave', 'dance', 'cheer', 'clap', 'toast', 'pose', 'ola', 'conga', 'dance2'];
+// Ações coletivas: alguém puxa e quem estiver perto entra.
+export const COLLECTIVES = ['dance2', 'toast', 'ola', 'conga', 'photo'];
 export const REACTIONS = ['👋', '😂', '🔥', '👏', '❤️', '😮'];
 export const POSES = ['stand', 'sit'];
 
@@ -41,7 +44,8 @@ export function encodeState(s) {
     m: s.moving ? (s.running ? 2 : 1) : 0,
     e: s.emote || null,
     n: s.emoteNonce || 0,
-    o: s.holding || null
+    o: s.holding || null,
+    g: s.playing || null
   });
 }
 
@@ -54,6 +58,10 @@ export const encodeRest = (id, ver, o) => enc('x', { o: id, r: ver, x: round(o.x
 export const encodeHit = (target, id, dx, dz) => enc('h', { u: target, o: id, dx: round(dx, 1000), dz: round(dz, 1000) });
 export const encodeTheme = (theme, ts) => enc('m', { th: theme, r: ts });
 export const encodeLook = (look) => enc('a', { l: validateLook(look) });
+export const encodeCollective = (id, kind, at) => enc('ca', { i: id, k: kind, at: Math.round(at) });
+export const encodeCollectiveJoin = (id) => enc('cj', { i: id });
+export const encodeCollectiveLeave = (id) => enc('cl', { i: id });
+const isActionId = (id) => typeof id === 'string' && /^[a-z0-9]{6,16}$/.test(id);
 export function encodeSnapshot(objects) {
   return enc('p', {
     l: Array.from(objects.values()).map((o) => [o.id, round(o.x), round(o.y), round(o.z), o.holder || '', o.ver])
@@ -86,9 +94,21 @@ export function decode(raw) {
         running: m.m === 2,
         emote: EMOTES.includes(m.e) ? m.e : null,
         emoteNonce: Number.isInteger(m.n) ? m.n : 0,
-        holding: isObj(m.o) ? m.o : null
+        holding: isObj(m.o) ? m.o : null,
+        playing: typeof m.g === 'string' && tableById(m.g) ? m.g : null
       };
     }
+    case 'ca':
+      return isActionId(m.i) && COLLECTIVES.includes(m.k) && finite(m.at) ? { type: 'collective', id: m.i, kind: m.k, at: m.at } : null;
+    case 'cj':
+      return isActionId(m.i) ? { type: 'collective-join', id: m.i } : null;
+    case 'cl':
+      return isActionId(m.i) ? { type: 'collective-leave', id: m.i } : null;
+    case 'gt':
+    case 'gf':
+    case 'gi':
+    case 'gp':
+      return decodeGameMessage(m);
     case 'r':
       return REACTIONS.includes(m.e) ? { type: 'reaction', emoji: m.e } : null;
     case 'g':

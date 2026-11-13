@@ -37,24 +37,25 @@ describe('pular e subir', () => {
   });
 
   it('sobe na mesa baixa andando (degrau) e fica em cima dela', () => {
-    // mesa: centro (0, -2.9), topo 0,36 m; chega pelo lado oeste
-    const start = { x: -1.6, z: -2.9, y: 0, vy: 0, yaw: 0, seat: -1 };
+    // mesa de centro do cinema: centro (0, -10.2), topo 0,36 m; chega pelo lado oeste
+    const start = { x: -1.6, z: -10.2, y: 0, vy: 0, yaw: 0, seat: -1 };
     const { s } = simulate(start, () => ({ right: true }), 0.4);
     expect(s.y).toBeCloseTo(0.36, 2);
     expect(groundAt(s.x, s.z, s.y)).toBeCloseTo(0.36, 2);
   });
 
   it('o balcão (1,13 m) é parede andando, mas dá para subir pulando', () => {
-    const walk = simulate({ x: 6.2, z: 0.5, y: 0, vy: 0, yaw: 0, seat: -1 }, () => ({ forward: true }), 1, {}, Math.PI / 2).s;
-    expect(walk.x).toBeLessThan(7.1); // bateu na lateral
+    // balcão do bar: de x 12,9 a 13,9
+    const walk = simulate({ x: 12.0, z: 0.5, y: 0, vy: 0, yaw: 0, seat: -1 }, () => ({ forward: true }), 1, {}, Math.PI / 2).s;
+    expect(walk.x).toBeLessThan(12.9); // bateu na lateral
     expect(walk.y).toBe(0);
-    const jump = simulate({ x: 6.2, z: 0.5, y: 0, vy: 0, yaw: 0, seat: -1 }, (i) => ({ jump: i === 0, forward: i < 18 }), 1.2, {}, Math.PI / 2).s;
+    const jump = simulate({ x: 12.2, z: 0.5, y: 0, vy: 0, yaw: 0, seat: -1 }, (i) => ({ jump: i === 0, forward: i < 18 }), 1.2, {}, Math.PI / 2).s;
     expect(jump.y).toBeCloseTo(1.13, 2);
   });
 
   it('ao sair da borda de um móvel, cai até o chão', () => {
     // anda para o oeste a partir de cima da mesa (só há chão nessa direção)
-    const { s } = simulate({ x: 0, z: -2.9, y: 0.36, vy: 0, yaw: 0, seat: -1 }, () => ({ forward: true }), 1, {}, -Math.PI / 2);
+    const { s } = simulate({ x: 0, z: -10.2, y: 0.36, vy: 0, yaw: 0, seat: -1 }, () => ({ forward: true }), 1, {}, -Math.PI / 2);
     expect(s.y).toBe(0);
   });
 
@@ -82,7 +83,7 @@ describe('objetos arremessáveis', () => {
   });
 
   it('pousa em cima de móveis', () => {
-    let o = { id: 'o4', x: 0, y: 2, z: -2.9, vx: 0, vy: 0, vz: 0, holder: null, moving: true, ver: 0 };
+    let o = { id: 'o4', x: 0, y: 2, z: -10.2, vx: 0, vy: 0, vz: 0, holder: null, moving: true, ver: 0 };
     for (let i = 0; i < 300 && o.moving; i++) o = stepObject(o, 1 / 60);
     expect(o.y).toBeCloseTo(0.36 + OBJECT_RADIUS, 2);
   });
@@ -106,7 +107,7 @@ describe('objetos arremessáveis', () => {
 
   it('só pega o que está perto, livre e não voando', () => {
     const objs = initialObjects();
-    const me = { x: -1.0, z: 5.6, y: 0 };
+    const me = { x: -1.5, z: 3.7, y: 0 };
     expect(nearestPickable(me, objs)?.id).toBe('o0');
     expect(canPick(me, { ...objs.get('o0'), holder: 'outra' })).toBe(false);
     expect(canPick({ x: 5, z: -5, y: 0 }, objs.get('o0'))).toBe(false);

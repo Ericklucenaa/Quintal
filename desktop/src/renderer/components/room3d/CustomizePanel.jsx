@@ -7,7 +7,8 @@ import {
 const TABS = [
   { id: 'estilos', label: 'Estilos' },
   { id: 'corpo', label: 'Corpo' },
-  { id: 'cabelo', label: 'Cabelo e rosto' },
+  { id: 'cabeca', label: 'Cabeça' },
+  { id: 'cabelo', label: 'Cabelo' },
   { id: 'roupas', label: 'Roupas' },
   { id: 'acessorios', label: 'Acessórios' }
 ];
@@ -57,6 +58,8 @@ export default function CustomizePanel({ look, onChange, onClose }) {
   const set = (patch) => onChange(validateLook({ ...look, ...patch }));
 
   const randomize = () => set({
+    body: randomOf('body'), brows: randomOf('brows'),
+    earrings: Math.random() < 0.6 ? 'nenhum' : randomOf('earrings'), accentColor: rand(CLOTH_COLORS.length),
     build: randomOf('build'), height: 0.92 + rand(17) / 100, skin: rand(SKIN_TONES.length),
     hair: randomOf('hair'), hairColor: rand(HAIR_COLORS.length), eyes: rand(EYE_COLORS.length),
     beard: Math.random() < 0.75 ? 'nenhuma' : randomOf('beard'),
@@ -100,9 +103,10 @@ export default function CustomizePanel({ look, onChange, onClose }) {
 
         {tab === 'corpo' && (
           <>
-            <Chips label="Corpo" options={OPTIONS.build} value={look.build} onPick={(v) => set({ build: v })} />
+            <Chips label="Corpo" options={OPTIONS.body} value={look.body} onPick={(v) => set({ body: v })} />
+            <Chips label="Biotipo" options={OPTIONS.build} value={look.build} onPick={(v) => set({ build: v })} />
             <div className="cz-field">
-              <div className="cz-label">Altura <span>{Math.round(look.height * 172)} cm</span></div>
+              <div className="cz-label">Altura <span>{Math.round(look.height * (look.body === 'feminino' ? 174 : 175))} cm</span></div>
               <input
                 type="range"
                 min="0.9"
@@ -122,6 +126,12 @@ export default function CustomizePanel({ look, onChange, onClose }) {
             <Chips label="Cabelo" options={OPTIONS.hair} value={look.hair} onPick={(v) => set({ hair: v })} />
             <Swatches label="Cor do cabelo" colors={HAIR_COLORS} value={look.hairColor} onPick={(v) => set({ hairColor: v })} />
             <Chips label="Barba" options={OPTIONS.beard} value={look.beard} onPick={(v) => set({ beard: v })} />
+          </>
+        )}
+
+        {tab === 'cabeca' && (
+          <>
+            <Chips label="Sobrancelhas" options={OPTIONS.brows} value={look.brows} onPick={(v) => set({ brows: v })} />
             <Swatches label="Cor dos olhos" colors={EYE_COLORS} value={look.eyes} onPick={(v) => set({ eyes: v })} />
           </>
         )}
@@ -130,8 +140,15 @@ export default function CustomizePanel({ look, onChange, onClose }) {
           <>
             <Chips label="Parte de cima" options={OPTIONS.top} value={look.top} onPick={(v) => set({ top: v })} />
             <Swatches label="Cor de cima" colors={CLOTH_COLORS} value={look.topColor} onPick={(v) => set({ topColor: v })} />
-            <Chips label="Parte de baixo" options={OPTIONS.bottom} value={look.bottom} onPick={(v) => set({ bottom: v })} />
-            <Swatches label="Cor de baixo" colors={CLOTH_COLORS} value={look.bottomColor} onPick={(v) => set({ bottomColor: v })} />
+            {['xadrez', 'listrada'].includes(look.top) && (
+              <Swatches label={look.top === 'xadrez' ? 'Cor do xadrez' : 'Cor das listras'} colors={CLOTH_COLORS} value={look.accentColor} onPick={(v) => set({ accentColor: v })} />
+            )}
+            {look.top !== 'vestido' && (
+              <>
+                <Chips label="Parte de baixo" options={OPTIONS.bottom} value={look.bottom} onPick={(v) => set({ bottom: v })} />
+                <Swatches label="Cor de baixo" colors={CLOTH_COLORS} value={look.bottomColor} onPick={(v) => set({ bottomColor: v })} />
+              </>
+            )}
             <Chips label="Calçado" options={OPTIONS.shoes} value={look.shoes} onPick={(v) => set({ shoes: v })} />
             {look.shoes !== 'descalco' && (
               <Swatches label="Cor do calçado" colors={CLOTH_COLORS} value={look.shoesColor} onPick={(v) => set({ shoesColor: v })} />
@@ -142,12 +159,13 @@ export default function CustomizePanel({ look, onChange, onClose }) {
         {tab === 'acessorios' && (
           <>
             <Chips label="Na cabeça" options={OPTIONS.hat} value={look.hat} onPick={(v) => set({ hat: v })} />
-            {['bone', 'gorro', 'chapeu', 'cowboy', 'mago', 'bandana', 'gato'].includes(look.hat) && (
+            {!['nenhum', 'coroa', 'pirata', 'chef'].includes(look.hat) && (
               <Swatches label="Cor do chapéu" colors={CLOTH_COLORS} value={look.hatColor} onPick={(v) => set({ hatColor: v })} />
             )}
             <Chips label="No rosto" options={OPTIONS.glasses} value={look.glasses} onPick={(v) => set({ glasses: v })} />
+            <Chips label="Brincos" options={OPTIONS.earrings} value={look.earrings} onPick={(v) => set({ earrings: v })} />
             <Chips label="Extra" options={OPTIONS.extra} value={look.extra} onPick={(v) => set({ extra: v })} />
-            {['capa', 'mochila', 'fones', 'cachecol'].includes(look.extra) || look.glasses === 'mascara' ? (
+            {look.extra !== 'nenhum' ? (
               <Swatches label="Cor do extra" colors={CLOTH_COLORS} value={look.extraColor} onPick={(v) => set({ extraColor: v })} />
             ) : null}
           </>

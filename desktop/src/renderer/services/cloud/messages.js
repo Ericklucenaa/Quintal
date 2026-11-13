@@ -171,7 +171,8 @@ export function sendMessage(scope, author, payload) {
       avatar: author.avatar || '',
       mentions,
       mentionEveryone: Boolean(payload.mentionEveryone),
-      pinned: false
+      pinned: false,
+      ...(payload.bot ? { bot: payload.bot, botCommand: String(payload.botCommand || '').slice(0, 120) } : {})
     });
 
     const activity = {

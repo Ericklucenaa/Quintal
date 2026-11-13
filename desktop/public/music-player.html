@@ -1,0 +1,294 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<title>Quintal · Vitrola</title>
+<style>
+  html, body { margin: 0; height: 100%; background: #0d0c0b; overflow: hidden; font: 13px/1.4 system-ui, sans-serif; color: #b8afa3; }
+  .slot { position: absolute; inset: 0; display: none; }
+  .slot.on { display: block; }
+  .slot iframe { width: 100%; height: 100%; border: 0; }
+  #idle { display: flex; align-items: center; justify-content: center; text-align: center; padding: 12px; }
+  #helper { position: absolute; width: 1px; height: 1px; left: -10px; top: -10px; overflow: hidden; }
+</style>
+</head>
+<body>
+<!--
+  Ponte entre o Quintal e os players oficiais do YouTube e do Spotify. Fica hospedada
+  num endereço https (o YouTube não aceita players em páginas file://) e é carregada
+  num iframe pelo app. Recebe o alvo ({ kind, ref, positionMs, paused }) e segue o
+  alvo: carrega, toca, pausa e corrige a posição quando ela se afasta.
+-->
+<div id="idle" class="slot on">Nada tocando.</div>
+<div id="yt" class="slot"><div id="yt-player"></div></div>
+<div id="sp" class="slot"><div id="sp-player"></div></div>
+<div id="helper"><div id="yt-helper"></div></div>
+<script>
+(() => {
+  const PARENTS = new Set([
+    'https://concord-3af70.web.app', 'https://concord-3af70.firebaseapp.com',
+    'http://localhost:5173', 'http://127.0.0.1:5173', 'file://', 'null'
+  ]);
+  const post = (msg) => window.parent.postMessage({ source: 'quintal-music', ...msg }, '*');
+
+  let target = null; // { kind, ref, positionMs, paused, at }
+  let volume = 70;
+  const loaded = {};
+  const loadScript = (src) => {
+    if (loaded[src]) return;
+    loaded[src] = true;
+    const s = document.createElement('script');
+    s.src = src;
+    s.async = true;
+    s.onerror = () => post({ type: 'error', code: 'script', message: 'Não foi possível carregar o player.' });
+    document.head.appendChild(s);
+  };
+  const show = (id) => ['idle', 'yt', 'sp'].forEach((k) => document.getElementById(k).classList.toggle('on', k === id));
+  const expected = () => {
+    if (!target) return 0;
+    return Math.max(0, target.paused ? target.positionMs : target.positionMs + (Date.now() - target.at));
+  };
+
+  // ---------------- YouTube ----------------
+  let ytApi = false;
+  let yt = null;
+  let ytReady = false;
+  let ytRef = null;
+  let ytLastSeek = 0;
+  window.onYouTubeIframeAPIReady = () => {
+    ytApi = true;
+    apply();
+    pendingExpand.splice(0).forEach(runExpand);
+  };
+
+  function ensureYouTube() {
+    if (!ytApi) return loadScript('https://www.youtube.com/iframe_api');
+    const startSeconds = Math.floor(expected() / 1000);
+    if (!yt) {
+      ytRef = target.ref;
+      yt = new YT.Player('yt-player', {
+        width: '100%',
+        height: '100%',
+        videoId: target.ref,
+        playerVars: { autoplay: target.paused ? 0 : 1, controls: 0, disablekb: 1, rel: 0, playsinline: 1, start: startSeconds, origin: location.origin },
+        events: {
+          onReady: () => {
+            ytReady = true;
+            yt.setVolume(volume);
+            syncYouTube();
+          },
+          onError: (e) => post({ type: 'error', kind: 'youtube', ref: ytRef, code: e.data })
+        }
+      });
+      return;
+    }
+    if (!ytReady) return;
+    if (ytRef !== target.ref) {
+      ytRef = target.ref;
+      if (target.paused) yt.cueVideoById({ videoId: target.ref, startSeconds });
+      else yt.loadVideoById({ videoId: target.ref, startSeconds });
+      ytLastSeek = Date.now();
+      return;
+    }
+    syncYouTube();
+  }
+
+  function syncYouTube() {
+    if (!ytReady || !target) return;
+    const st = yt.getPlayerState();
+    const cur = (yt.getCurrentTime() || 0) * 1000;
+    const dur = (yt.getDuration() || 0) * 1000;
+    const exp = expected();
+    if (target.paused) {
+      if (st === 1 || st === 3) yt.pauseVideo();
+      if (Math.abs(cur - exp) > 1500 && Date.now() - ytLastSeek > 1500) { yt.seekTo(exp / 1000, true); ytLastSeek = Date.now(); }
+      return;
+    }
+    if (st === 0) return; // acabou: quem avança é o app
+    if (Math.abs(cur - exp) > 2000 && (!dur || exp < dur - 1000) && Date.now() - ytLastSeek > 2500) {
+      yt.seekTo(exp / 1000, true);
+      ytLastSeek = Date.now();
+    }
+    if (st !== 1 && st !== 3) yt.playVideo();
+  }
+
+  function stopYouTube() {
+    if (ytReady && yt.getPlayerState() === 1) yt.pauseVideo();
+  }
+
+  // Lista os vídeos de uma playlist (usado no navegador, sem o leitor do app).
+  const pendingExpand = [];
+  function runExpand({ reqId, list }) {
+    const host = document.createElement('div');
+    document.getElementById('helper').appendChild(host);
+    let done = false;
+    const finish = (ids) => {
+      if (done) return;
+      done = true;
+      post({ type: 'expanded', reqId, ids: (ids || []).filter((id) => /^[\w-]{11}$/.test(id)).slice(0, 100) });
+      try { helper.destroy(); } catch (e) { /* já destruído */ }
+      host.remove();
+    };
+    const helper = new YT.Player(host, {
+      width: 1,
+      height: 1,
+      playerVars: { listType: 'playlist', list, autoplay: 0, origin: location.origin },
+      events: {
+        onReady: () => {
+          helper.mute();
+          helper.cuePlaylist({ listType: 'playlist', list });
+          setTimeout(() => finish(helper.getPlaylist && helper.getPlaylist()), 3500);
+        },
+        onStateChange: (e) => { if (e.data === 5) finish(helper.getPlaylist()); },
+        onError: () => finish([])
+      }
+    });
+    setTimeout(() => finish([]), 9000);
+  }
+
+  // ---------------- Spotify ----------------
+  let spApi = null;
+  let sp = null;
+  let spCreating = false;
+  let spReady = false;
+  let spRef = null;
+  let spState = { position: 0, duration: 0, isPaused: true, isBuffering: false };
+  let spLastSeek = 0;
+  window.onSpotifyIframeApiReady = (api) => {
+    spApi = api;
+    apply();
+  };
+
+  function ensureSpotify() {
+    if (!spApi) return loadScript('https://open.spotify.com/embed/iframe-api/v1');
+    if (!sp) {
+      if (spCreating) return;
+      spCreating = true;
+      spRef = target.ref;
+      spApi.createController(document.getElementById('sp-player'), { uri: target.ref, width: '100%', height: '100%' }, (c) => {
+        sp = c;
+        c.addListener('ready', () => {
+          spReady = true;
+          syncSpotify(true);
+        });
+        c.addListener('playback_update', (e) => { spState = e.data || spState; });
+      });
+      return;
+    }
+    if (!spReady) return;
+    if (spRef !== target.ref) {
+      spRef = target.ref;
+      spState = { position: 0, duration: 0, isPaused: true, isBuffering: true };
+      sp.loadUri(target.ref);
+      spLastSeek = Date.now();
+      setTimeout(() => syncSpotify(true), 900);
+      return;
+    }
+    syncSpotify();
+  }
+
+  function syncSpotify(force) {
+    if (!spReady || !target || target.kind !== 'spotify') return;
+    const exp = expected();
+    if (target.paused) {
+      if (!spState.isPaused) sp.pause();
+      return;
+    }
+    if (spState.isPaused && !spState.isBuffering) {
+      if (spState.position > 0) sp.resume();
+      else sp.play();
+    }
+    const cur = spState.position || 0;
+    if ((force || Date.now() - spLastSeek > 3000) && spState.duration && exp < spState.duration - 1000 && Math.abs(cur - exp) > 2500) {
+      sp.seek(exp / 1000);
+      spLastSeek = Date.now();
+    }
+  }
+
+  function stopSpotify() {
+    if (spReady && !spState.isPaused) sp.pause();
+  }
+
+  // ---------------- Alvo ----------------
+  function apply() {
+    if (!target) {
+      stopYouTube();
+      stopSpotify();
+      show('idle');
+      return;
+    }
+    if (target.kind === 'youtube') {
+      stopSpotify();
+      show('yt');
+      ensureYouTube();
+    } else {
+      stopYouTube();
+      show('sp');
+      ensureSpotify();
+    }
+  }
+
+  setInterval(() => {
+    if (!target) return;
+    if (target.kind === 'youtube') {
+      if (ytReady && ytRef === target.ref) {
+        syncYouTube();
+        const st = yt.getPlayerState();
+        post({
+          type: 'state', kind: 'youtube', ref: ytRef,
+          positionMs: Math.round((yt.getCurrentTime() || 0) * 1000),
+          durationMs: Math.round((yt.getDuration() || 0) * 1000),
+          playing: st === 1, ended: st === 0,
+          title: (yt.getVideoData && yt.getVideoData().title) || ''
+        });
+      }
+    } else if (spReady && spRef === target.ref) {
+      syncSpotify();
+      post({
+        type: 'state', kind: 'spotify', ref: spRef,
+        positionMs: Math.round(spState.position || 0),
+        durationMs: Math.round(spState.duration || 0),
+        playing: !spState.isPaused, ended: false
+      });
+    }
+  }, 1000);
+
+  window.addEventListener('message', (e) => {
+    if (e.source !== window.parent || !PARENTS.has(e.origin)) return;
+    const m = e.data;
+    if (!m || m.source !== 'quintal-app') return;
+    switch (m.type) {
+      case 'target': {
+        const ok = m.kind === 'youtube' ? /^[\w-]{11}$/.test(m.ref) : /^spotify:(track|episode|album|playlist):[A-Za-z0-9]{22}$/.test(m.ref);
+        target = ok ? { kind: m.kind, ref: m.ref, positionMs: Math.max(0, Number(m.positionMs) || 0), paused: Boolean(m.paused), at: Date.now() } : null;
+        apply();
+        break;
+      }
+      case 'clear':
+        target = null;
+        apply();
+        break;
+      case 'volume':
+        volume = Math.max(0, Math.min(100, Number(m.value) || 0));
+        if (ytReady) yt.setVolume(volume);
+        break;
+      case 'expand':
+        if (typeof m.list === 'string' && /^[\w-]{10,64}$/.test(m.list)) {
+          if (ytApi) runExpand({ reqId: m.reqId, list: m.list });
+          else {
+            pendingExpand.push({ reqId: m.reqId, list: m.list });
+            loadScript('https://www.youtube.com/iframe_api');
+          }
+        }
+        break;
+      default:
+    }
+  });
+
+  post({ type: 'ready' });
+})();
+</script>
+</body>
+</html>

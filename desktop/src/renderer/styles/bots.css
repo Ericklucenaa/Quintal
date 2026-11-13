@@ -1,0 +1,175 @@
+/* ==========================================================================
+   Bots, permissões e Vitrola. Usa os tokens do tema (claro e escuro).
+   ========================================================================== */
+
+/* --- selo BOT e mensagens de bot ------------------------------------------ */
+.bot-tag {
+  display: inline-flex; align-items: center; height: 16px; padding: 0 5px; border-radius: 3px;
+  background: var(--accent-primary); color: var(--text-on-accent);
+  font-size: 9.5px; font-weight: 800; letter-spacing: 0.06em; line-height: 1; vertical-align: 1px;
+}
+.message-avatar.bot { border-radius: var(--radius-lg); }
+.message-bot-via { font-size: 11.5px; color: var(--text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 40ch; }
+.message-ephemeral {
+  display: flex; gap: 14px; margin: 6px 16px 2px; padding: 10px 14px; border-radius: var(--radius-md);
+  background: var(--bg-tertiary); border-left: 3px solid var(--accent-primary);
+}
+.message-ephemeral .message-avatar { width: 36px; height: 36px; flex-shrink: 0; }
+.message-ephemeral-icon {
+  width: 36px; height: 36px; flex-shrink: 0; border-radius: var(--radius-lg); background: var(--bg-active);
+  color: var(--accent-primary); display: inline-flex; align-items: center; justify-content: center;
+}
+.message-ephemeral .message-meta { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.message-author.static { cursor: default; }
+.message-ephemeral-note { font-size: 11.5px; color: var(--text-muted); }
+.message-ephemeral .link-button { font-size: 11.5px; margin-left: auto; }
+
+/* sugestões de comandos no compositor */
+.command-popup .command-option { display: grid; grid-template-columns: 22px auto 1fr auto; align-items: center; gap: 8px; }
+.command-option img { width: 22px; height: 22px; border-radius: 5px; }
+.command-name { font-family: var(--font-mono); font-size: 12.5px; font-weight: 600; color: var(--text-primary); white-space: nowrap; }
+.command-name em { font-style: normal; color: var(--text-muted); font-weight: 500; }
+.command-help { font-size: 12px; color: var(--text-secondary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.command-bot { font-size: 11px; color: var(--text-muted); }
+
+/* membros: seção de bots */
+.member-item.bot-member { width: 100%; border: none; background: none; text-align: left; font: inherit; color: inherit; }
+.member-item.bot-member .avatar-img { border-radius: var(--radius-md); }
+.member-item.bot-member .member-item-name { display: inline-flex; align-items: center; gap: 6px; }
+
+/* --- aba Bots ------------------------------------------------------------- */
+.bots-panel { display: flex; flex-direction: column; gap: 12px; }
+.bots-intro { margin: 0; font-size: 13px; color: var(--text-secondary); line-height: 1.5; }
+.bots-foot { margin: 0; font-size: 12px; color: var(--text-muted); }
+.bot-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; border: 1px solid var(--border-color); border-radius: var(--radius-md); }
+.bot-row { padding: 14px; border-top: 1px solid var(--border-color); display: flex; flex-direction: column; gap: 8px; }
+.bot-row:first-child { border-top: none; }
+.bot-row-main { display: flex; align-items: center; gap: 12px; }
+.bot-avatar { width: 40px; height: 40px; border-radius: var(--radius-lg); flex-shrink: 0; }
+.bot-row-text { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.bot-row-title { display: flex; align-items: center; gap: 8px; }
+.bot-row-title strong { font-size: 14px; color: var(--text-primary); }
+.bot-on { display: inline-flex; align-items: center; gap: 3px; font-size: 11.5px; font-weight: 600; color: var(--accent-success); }
+.bot-tagline { font-size: 12.5px; color: var(--text-secondary); }
+.bot-row-actions { display: flex; align-items: center; gap: 6px; flex-shrink: 0; }
+.bot-locked { display: inline-flex; align-items: center; gap: 4px; font-size: 12px; color: var(--text-muted); }
+.btn-ghost-danger { background: transparent; color: var(--accent-danger); border: 1px solid transparent; }
+.btn-ghost-danger:hover { border-color: var(--accent-danger); }
+.bot-description { margin: 0 0 0 52px; font-size: 12.5px; color: var(--text-muted); line-height: 1.5; }
+.bot-commands { margin-left: 52px; display: flex; flex-wrap: wrap; gap: 6px; }
+.bot-command {
+  font-family: var(--font-mono); font-size: 11.5px; padding: 2px 7px; border-radius: var(--radius-sm);
+  background: var(--bg-tertiary); color: var(--text-secondary); border: 1px solid var(--border-color);
+}
+.bot-command em { font-style: normal; font-family: var(--font-main); color: var(--text-muted); }
+.bot-config { margin-left: 52px; display: flex; flex-direction: column; gap: 8px; padding: 12px; border-radius: var(--radius-md); background: var(--bg-tertiary); }
+.bot-config .form-label { margin: 0; display: flex; justify-content: space-between; }
+.bot-config-count { font-weight: 500; color: var(--text-muted); }
+.bot-config-hint { font-size: 12px; color: var(--text-muted); }
+.bot-config .form-input.narrow { max-width: 110px; }
+.bot-config-actions { display: flex; justify-content: flex-end; }
+.checkbox-row { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--text-secondary); }
+.checkbox-row input { accent-color: var(--accent-primary); width: 15px; height: 15px; }
+
+/* --- aba Permissões ------------------------------------------------------- */
+.perms-panel { display: flex; flex-direction: column; gap: 12px; }
+.perms-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.perms-table thead th {
+  text-align: center; font-size: 11px; font-weight: 700; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.06em;
+  padding: 0 8px 8px; border-bottom: 1px solid var(--border-color);
+}
+.perms-table thead th:first-child { text-align: left; padding-left: 0; }
+.perms-group th { text-align: left; padding: 14px 0 6px; font-size: 12px; font-weight: 700; color: var(--accent-primary); }
+.perms-table tbody tr:not(.perms-group) th { text-align: left; padding: 8px 12px 8px 0; font-weight: 400; border-bottom: 1px solid var(--border-color); }
+.perms-table td { text-align: center; padding: 8px; border-bottom: 1px solid var(--border-color); width: 96px; }
+.perms-table td input { width: 16px; height: 16px; accent-color: var(--accent-primary); cursor: pointer; }
+.perms-table td input:disabled { cursor: not-allowed; }
+.perm-name { display: block; font-weight: 600; color: var(--text-primary); }
+.perm-desc { display: block; font-size: 12px; color: var(--text-muted); margin-top: 2px; }
+.perm-always { font-size: 11.5px; color: var(--text-muted); }
+.perms-actions { display: flex; justify-content: space-between; gap: 8px; }
+
+/* --- Vitrola (doca flutuante) --------------------------------------------- */
+.music-dock {
+  position: fixed; right: 16px; bottom: 16px; z-index: 60; width: 360px; max-height: calc(100vh - 80px);
+  display: flex; flex-direction: column; background: var(--bg-elevated); color: var(--text-primary);
+  border: 1px solid var(--border-strong); border-radius: var(--radius-lg); box-shadow: var(--shadow-lg); overflow: hidden;
+}
+.music-dock.is-hidden { visibility: hidden; pointer-events: none; width: 1px; height: 1px; right: 0; bottom: 0; border: none; box-shadow: none; }
+.music-head { display: flex; align-items: center; gap: 10px; padding: 10px 10px 10px 12px; border-bottom: 1px solid var(--border-color); }
+.music-bot-avatar { width: 28px; height: 28px; border-radius: 7px; }
+.music-head-text { flex: 1; min-width: 0; display: flex; flex-direction: column; line-height: 1.2; }
+.music-head-text strong { font-size: 13px; }
+.music-head-text span { font-size: 11.5px; color: var(--text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.music-icon {
+  height: 28px; min-width: 28px; padding: 0 6px; border: none; border-radius: var(--radius-sm); background: transparent;
+  color: var(--text-secondary); display: inline-flex; align-items: center; justify-content: center; gap: 4px; cursor: pointer; font: inherit; font-size: 12px;
+}
+.music-icon:hover, .music-icon[aria-pressed='true'] { background: var(--bg-hover); color: var(--text-primary); }
+.music-count { font-variant-numeric: tabular-nums; font-weight: 600; }
+/* o player oficial fica sempre visível enquanto toca (exigência do YouTube: 200 px) */
+.music-player { position: relative; height: 0; overflow: hidden; background: #0d0c0b; transition: height 0.2s var(--ease); }
+.music-player iframe { width: 100%; height: 100%; border: 0; display: block; }
+.music-player.on, .music-dock:not(.idle) .music-player { height: 200px; }
+.music-dock.spotify .music-player.on { height: 152px; }
+.music-dock.idle .music-player { height: 120px; }
+.music-dock.idle .music-player iframe { position: absolute; inset: 0; opacity: 0; pointer-events: none; }
+.music-player-empty {
+  position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px;
+  color: #b8afa3; font-size: 12.5px; background: #12100e; text-align: center; padding: 0 16px;
+}
+.music-now { padding: 10px 12px 4px; display: flex; flex-direction: column; gap: 6px; }
+.music-now-text { display: flex; flex-direction: column; min-width: 0; }
+.music-now-text strong { font-size: 13.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.music-now-text small { font-size: 12px; color: var(--text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.music-progress { display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 8px; font-size: 11px; color: var(--text-muted); font-variant-numeric: tabular-nums; }
+.music-progress input, .music-volume input { width: 100%; accent-color: var(--accent-primary); }
+.music-hint { font-size: 12px; color: var(--text-secondary); background: var(--bg-tertiary); padding: 6px 8px; border-radius: var(--radius-sm); }
+.music-hint.warn { color: var(--accent-warning); }
+.music-controls { display: flex; align-items: center; gap: 4px; padding: 6px 10px; }
+.music-btn {
+  height: 30px; min-width: 30px; padding: 0 8px; border-radius: var(--radius-sm); border: 1px solid var(--border-strong);
+  background: var(--bg-primary); color: var(--text-primary); display: inline-flex; align-items: center; justify-content: center; gap: 6px; cursor: pointer;
+  font: inherit; font-size: 12.5px; font-weight: 600;
+}
+.music-btn:hover:not(:disabled) { border-color: var(--accent-primary); }
+.music-btn.primary { background: var(--accent-primary); border-color: var(--accent-primary); color: var(--text-on-accent); }
+.music-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+.music-volume { flex: 1; display: flex; align-items: center; gap: 4px; min-width: 0; }
+.music-queue-wrap { border-top: 1px solid var(--border-color); display: flex; flex-direction: column; min-height: 0; }
+.music-queue-head { display: flex; justify-content: space-between; align-items: center; padding: 8px 12px 4px; font-size: 11px; font-weight: 700; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.06em; }
+.music-queue-head .link-button { text-transform: none; letter-spacing: 0; font-size: 12px; }
+.music-queue { list-style: none; margin: 0; padding: 0 6px 6px; overflow-y: auto; max-height: 230px; }
+.music-queue li { display: grid; grid-template-columns: 18px 40px 1fr auto auto; align-items: center; gap: 8px; padding: 5px 6px; border-radius: var(--radius-sm); }
+.music-queue li:hover { background: var(--bg-hover); }
+.music-queue-pos { font-size: 11px; color: var(--text-muted); text-align: right; font-variant-numeric: tabular-nums; }
+.music-queue img, .music-thumb-blank { width: 40px; height: 30px; object-fit: cover; border-radius: 3px; background: var(--bg-tertiary); }
+.music-queue-text { min-width: 0; display: flex; flex-direction: column; }
+.music-queue-text strong { font-size: 12.5px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.music-queue-text small { font-size: 11px; color: var(--text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.music-queue-dur { font-size: 11px; color: var(--text-muted); font-variant-numeric: tabular-nums; }
+.music-queue-actions { display: flex; gap: 2px; opacity: 0; }
+.music-queue li:hover .music-queue-actions, .music-queue li:focus-within .music-queue-actions { opacity: 1; }
+.music-queue-actions button { width: 22px; height: 22px; border: none; border-radius: 3px; background: transparent; color: var(--text-secondary); cursor: pointer; display: inline-flex; align-items: center; justify-content: center; }
+.music-queue-actions button:hover { background: var(--bg-active); color: var(--text-primary); }
+.music-empty-queue { padding: 6px 14px 12px; font-size: 12.5px; color: var(--text-muted); }
+.music-empty-queue code { font-family: var(--font-mono); font-size: 12px; }
+.music-add { padding: 8px 10px 10px; border-top: 1px solid var(--border-color); display: flex; flex-direction: column; gap: 6px; }
+.music-add-row { display: flex; gap: 6px; }
+.music-add input {
+  flex: 1; min-width: 0; height: 32px; padding: 0 10px; border-radius: var(--radius-sm); border: 1px solid var(--border-strong);
+  background: var(--bg-primary); color: var(--text-primary); font: inherit; font-size: 12.5px;
+}
+.music-add input:focus { outline: none; border-color: var(--border-focus); }
+.music-status { font-size: 12px; padding: 0 2px; }
+.music-status.ok { color: var(--accent-success); }
+.music-status.error { color: var(--accent-danger); padding: 0 12px 10px; }
+.music-add .music-status.error { padding: 0 2px; }
+.spin { animation: music-spin 0.9s linear infinite; }
+.spin-slow { animation: music-spin 3.2s linear infinite; }
+@keyframes music-spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .spin-slow { animation: none; } }
+
+/* chip da Vitrola no cabeçalho da chamada */
+.vitrola-chip { max-width: 260px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.vitrola-chip.playing { color: var(--accent-primary); border-color: var(--accent-primary); }

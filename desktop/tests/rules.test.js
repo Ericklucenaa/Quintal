@@ -474,3 +474,92 @@ describe('events, DM calls and account data', () => {
     await assertFails(getDoc(doc(db(MEMBER), 'concord_error_reports', 'r1')));
   });
 });
+
+describe('bots, permissões e Vitrola', () => {
+  const VITROLA = { addedBy: OWNER, addedAt: 1, config: {} };
+  const withBots = (bots, extra = {}) => seed((f) => updateDoc(doc(f, 'concord_servers', 'srv1'), { bots, ...extra }));
+  const presence = (uid, channelId = 'voz') => seed((f) => setDoc(doc(f, 'concord_voice_presence', uid), { userId: uid, serverId: 'srv1', channelId }));
+  const session = (data) => ({ serverId: 'srv1', channelId: 'voz', hostId: MEMBER, current: null, updatedAt: 1, ...data });
+  const item = (id, data = {}) => ({ id, sessionId: 'srv1_voz', serverId: 'srv1', channelId: 'voz', kind: 'youtube', ref: 'dQw4w9WgXcQ', title: 't', addedBy: MEMBER, addedByName: 'member', order: 1, ...data });
+
+  it('só quem tem "Gerenciar bots" liga bots, e só bots que existem', async () => {
+    await assertFails(updateDoc(doc(db(MEMBER), 'concord_servers', 'srv1'), { 'bots.sorte': VITROLA }));
+    await assertFails(updateDoc(doc(db(MOD), 'concord_servers', 'srv1'), { 'bots.sorte': VITROLA }));
+    await assertSucceeds(updateDoc(doc(db(ADMIN), 'concord_servers', 'srv1'), { 'bots.sorte': VITROLA }));
+    await withBots({}, { rolePermissions: { moderator: ['bots.manage'], member: [] } });
+    await assertSucceeds(updateDoc(doc(db(MOD), 'concord_servers', 'srv1'), { 'bots.vitrola': VITROLA }));
+    await assertFails(updateDoc(doc(db(MOD), 'concord_servers', 'srv1'), { 'bots.hacker': VITROLA }));
+    // com "Gerenciar bots" não dá para mexer em outros campos
+    await assertFails(updateDoc(doc(db(MOD), 'concord_servers', 'srv1'), { 'bots.sorte': VITROLA, rolePermissions: { moderator: [], member: [] } }));
+    await assertFails(updateDoc(doc(db(MOD), 'concord_servers', 'srv1'), { rolePermissions: { moderator: ['bots.manage', 'music.control'], member: [] } }));
+  });
+
+  it('mensagem de bot exige o bot ligado e a permissão de usar bots', async () => {
+    const botMsg = (id, bot, uid = MEMBER) => setDoc(doc(db(uid), 'concord_messages', id), message(id, { userId: uid, bot, botCommand: '/dado' }));
+    await assertFails(botMsg('b1', 'sorte'));
+    await withBots({ sorte: VITROLA, porteiro: VITROLA });
+    await assertSucceeds(botMsg('b2', 'sorte'));
+    await assertFails(botMsg('b3', 'vitrola'));
+    await withBots({ sorte: VITROLA, porteiro: VITROLA }, { rolePermissions: { moderator: [], member: [] } });
+    await assertFails(botMsg('b4', 'sorte'));
+    await assertSucceeds(botMsg('b5', 'porteiro')); // boas-vindas de quem acabou de entrar
+  });
+
+  it('o Guarda barra palavras, links e menções nas regras (moderadores passam)', async () => {
+    await withBots({ guarda: { addedBy: OWNER, config: { pattern: process.env.GUARD_PATTERN || String.raw`(?s).*(^|[^\pL\pN])(feio)($|[^\pL\pN]).*`, blockLinks: true, maxMentions: 2 } } });
+    const post = (id, data, uid = MEMBER) => setDoc(doc(db(uid), 'concord_messages', id), message(id, { userId: uid, ...data }));
+    await assertFails(post('g1', { content: 'que FEIO isso' }));
+    await assertSucceeds(post('g2', { content: 'feiosamente aceitável' }));
+    await assertFails(post('g3', { content: 'olha https://exemplo.com' }));
+    await assertFails(post('g4', { content: 'oi', mentions: [OWNER, ADMIN, MOD] }));
+    await assertSucceeds(post('g5', { content: 'oi', mentions: [OWNER, ADMIN] }));
+    await assertSucceeds(post('g6', { content: 'feio https://x.com' }, MOD));
+    // editar para burlar também não passa
+    await assertFails(updateDoc(doc(db(MEMBER), 'concord_messages', 'g2'), { content: 'feio' }));
+  });
+
+  it('qualquer membro pede música (com a Vitrola ligada); quem não é do servidor não', async () => {
+    await assertFails(setDoc(doc(db(MEMBER), 'concord_music_queue', 'q1'), item('q1')));
+    await withBots({ vitrola: VITROLA });
+    await assertSucceeds(setDoc(doc(db(MEMBER), 'concord_music_queue', 'q2'), item('q2')));
+    await assertFails(setDoc(doc(db(MEMBER), 'concord_music_queue', 'q3'), item('q3', { addedBy: OWNER })));
+    await assertFails(setDoc(doc(db(STRANGER), 'concord_music_queue', 'q4'), item('q4', { addedBy: STRANGER })));
+    await withBots({ vitrola: VITROLA }, { rolePermissions: { moderator: [], member: [] } });
+    await assertSucceeds(setDoc(doc(db(MEMBER), 'concord_music_queue', 'q5'), item('q5')));
+  });
+
+  it('controle da Vitrola: anfitrião, quem pediu e quem tem "Controlar"', async () => {
+    await withBots({ vitrola: VITROLA });
+    await presence(MEMBER);
+    await presence(ADMIN);
+    // começar a tocar: precisa estar no canal
+    await assertSucceeds(setDoc(doc(db(MEMBER), 'concord_music', 'srv1_voz'), session()));
+    await seed((f) => setDoc(doc(f, 'concord_music', 'srv1_voz'), session({
+      hostId: ADMIN, current: { queueId: 'x', addedBy: ADMIN, startedAt: Date.now(), durationMs: 600000, paused: false }
+    })));
+    // anfitrião (ADMIN) está na chamada e a faixa não acabou: membro não assume
+    await assertFails(updateDoc(doc(db(MEMBER), 'concord_music', 'srv1_voz'), { hostId: MEMBER, current: null }));
+    // moderador controla (pausar) mesmo sem ser anfitrião
+    await assertSucceeds(updateDoc(doc(db(MOD), 'concord_music', 'srv1_voz'), { 'current.paused': true }));
+    // o anfitrião saiu: quem está na chamada assume
+    await seed((f) => deleteDoc(doc(f, 'concord_voice_presence', ADMIN)));
+    await assertSucceeds(updateDoc(doc(db(MEMBER), 'concord_music', 'srv1_voz'), { hostId: MEMBER, current: null }));
+  });
+
+  it('sair da fila: quem pediu, quem controla ou quem começa a tocar o item', async () => {
+    await withBots({ vitrola: VITROLA });
+    await presence(MEMBER);
+    await seed(async (f) => {
+      await setDoc(doc(f, 'concord_music_queue', 'qa'), item('qa', { addedBy: OWNER }));
+      await setDoc(doc(f, 'concord_music_queue', 'qb'), item('qb', { addedBy: OWNER }));
+      await setDoc(doc(f, 'concord_music', 'srv1_voz'), session({ hostId: MEMBER }));
+    });
+    await assertFails(deleteDoc(doc(db(MEMBER), 'concord_music_queue', 'qa')));
+    const f = db(MEMBER);
+    const batch = writeBatch(f);
+    batch.update(doc(f, 'concord_music', 'srv1_voz'), { current: { queueId: 'qb', addedBy: OWNER, startedAt: Date.now(), durationMs: 0, paused: false } });
+    batch.delete(doc(f, 'concord_music_queue', 'qb'));
+    await assertSucceeds(batch.commit());
+    await assertSucceeds(deleteDoc(doc(db(MOD), 'concord_music_queue', 'qa')));
+  });
+});

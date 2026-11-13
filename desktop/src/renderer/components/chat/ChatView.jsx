@@ -7,6 +7,11 @@ import { useNotification } from '../../context/NotificationContext';
 import { useUnread } from '../../context/UnreadContext';
 import { useOverlayUI } from '../../context/OverlayUIContext';
 import { useMessages, useTyping } from '../../hooks/useMessages';
+import { useMusic } from '../../context/MusicContext';
+import { availableCommands, findCommand, helpText, parseCommand, runSorte } from '../../services/bots/commands';
+import { botById, guardVerdict } from '../../services/bots/catalog';
+import { formatDuration } from '../../services/bots/music';
+import { hasPermission, PERMISSIONS } from '../../services/permissions';
 import {
   sendMessage,
   editMessage,
@@ -22,7 +27,7 @@ import {
   deleteAttachment,
   INLINE_IMAGE_LIMIT_CHARS
 } from '../../services/cloud/attachments';
-import { extractMentions } from './MarkdownText';
+import MarkdownText, { extractMentions } from './MarkdownText';
 import MessageItem from './MessageItem';
 import MessageComposer from './MessageComposer';
 import ImageLightboxModal from '../ImageLightboxModal';
@@ -65,7 +70,8 @@ const ChatView = forwardRef(function ChatView(
     placeholder,
     emptyState,
     blockedIds = [],
-    onJoinInvite
+    onJoinInvite,
+    server = null
   },
   ref
 ) {
@@ -78,6 +84,8 @@ const ChatView = forwardRef(function ChatView(
   const { messages, hasMore, loadMore, loading, error } = useMessages(scope);
   const { typingNames, notifyTyping, stopTyping } = useTyping(scope, user);
   const [failed, setFailed] = useState([]); // messages the server rejected
+  const [ephemeral, setEphemeral] = useState([]); // respostas de bot que só eu vejo
+  const music = useMusic();
   const [pollOpen, setPollOpen] = useState(false);
   // "Novas mensagens" divider: where I had read up to when I opened the conversation.
   const [dividerAt, setDividerAt] = useState(undefined);
@@ -97,6 +105,10 @@ const ChatView = forwardRef(function ChatView(
   const atBottomRef = useRef(true);
   const lastCountRef = useRef(0);
 
+  const botCommands = useMemo(() => (scope.type === 'channel' && server
+    ? availableCommands(server, user.id).map(({ bot, cmd }) => ({ ...cmd, botName: bot?.name, botAvatar: bot?.avatar }))
+    : []), [scope.type, server, user.id]);
+
   const memberNames = useMemo(() => new Set(members.map((m) => m.username?.toLowerCase()).filter(Boolean)), [members]);
   const membersByName = useMemo(() => new Map(members.map((m) => [m.username?.toLowerCase(), m])), [members]);
 
@@ -104,6 +116,7 @@ const ChatView = forwardRef(function ChatView(
     setReplyTo(null);
     setEditingId(null);
     setFailed([]);
+    setEphemeral([]);
     setDividerAt(undefined);
     setManualUnread(false);
     lastCountRef.current = 0;
@@ -209,13 +222,99 @@ const ChatView = forwardRef(function ChatView(
     });
   };
 
+  const showEphemeral = (botId, text) => {
+    setEphemeral((prev) => [...prev.slice(-4), { id: `e-${Date.now()}-${Math.random()}`, botId, text }]);
+    atBottomRef.current = true;
+  };
+
+  /**
+   * Comandos "/" dos bots. Devolve true quando o texto era um comando tratado aqui;
+   * erros sobem como exceção (o compositor mantém o texto e mostra o motivo).
+   */
+  const runBotCommand = async (raw) => {
+    const parsed = parseCommand(raw);
+    if (!parsed || scope.type !== 'channel' || !server) return false;
+    const found = findCommand(server, parsed.name);
+    if (!found) return false;
+    const { bot, cmd } = found;
+    if (!cmd.open && !hasPermission(server, user.id, 'bots.use')) throw new Error('Seu cargo não pode usar comandos de bots neste servidor.');
+    if (cmd.permission && !hasPermission(server, user.id, cmd.permission)) {
+      const label = PERMISSIONS.find((p) => p.id === cmd.permission)?.label || cmd.permission;
+      throw new Error(`Para usar /${cmd.name} você precisa da permissão “${label}”.`);
+    }
+    const asBot = (botId, content) => dispatch({ content, bot: botId, botCommand: `/${parsed.name}${parsed.args ? ` ${parsed.args}` : ''}`.slice(0, 120) });
+
+    if (!bot) {
+      showEphemeral(null, helpText(server, user.id));
+      return true;
+    }
+    if (bot.id === 'sorte') {
+      const res = runSorte(parsed.name, parsed.args, { username: user.username, members });
+      if (res.error) throw new Error(res.error);
+      asBot('sorte', res.text);
+      return true;
+    }
+    if (bot.id === 'vitrola') {
+      const inThisServer = music?.enabled && music.serverId === server.id;
+      if (parsed.name === 'fila') {
+        if (!inThisServer) throw new Error('Entre num canal de voz deste servidor para ver a fila da Vitrola.');
+        const now = music.current ? `Tocando: **${music.current.title}**${music.current.artist ? ` — ${music.current.artist}` : ''} (pedida por @${music.current.addedByName})` : 'Nada tocando agora.';
+        const next = music.queue.slice(0, 10).map((q, i) => `${i + 1}. ${q.title} · ${formatDuration(q.durationMs)} · @${q.addedByName}`).join('\n');
+        const more = music.queue.length > 10 ? `\n…e mais ${music.queue.length - 10}.` : '';
+        showEphemeral('vitrola', `${now}\n\n${next ? `**Próximas**\n${next}${more}` : 'A fila está vazia.'}`);
+        return true;
+      }
+      if (!inThisServer) throw new Error('Entre num canal de voz deste servidor para usar a Vitrola.');
+      switch (parsed.name) {
+        case 'tocar': {
+          if (!parsed.args) throw new Error('Passe um link: /tocar https://youtu.be/…');
+          const res = await music.actions.addLink(parsed.args);
+          asBot('vitrola', res.added === 1
+            ? `Na fila: **${res.first.title}**${res.first.artist ? ` — ${res.first.artist}` : ''}`
+            : `Na fila: **${res.added} músicas**, começando por “${res.first.title}”`);
+          return true;
+        }
+        case 'pular': {
+          const title = music.current?.title;
+          if (!title) throw new Error('Não tem nada tocando.');
+          await music.actions.skip();
+          asBot('vitrola', `Pulou **${title}**.`);
+          return true;
+        }
+        case 'pausar':
+          if (!music.current) throw new Error('Não tem nada tocando.');
+          await music.actions.pause();
+          asBot('vitrola', `Pausada: **${music.current.title}**.`);
+          return true;
+        case 'continuar':
+          if (!music.current) throw new Error('Não tem nada tocando.');
+          await music.actions.resume();
+          asBot('vitrola', `Voltou a tocar **${music.current.title}**.`);
+          return true;
+        case 'limpar':
+          await music.actions.clear();
+          asBot('vitrola', 'A fila foi esvaziada.');
+          return true;
+        default:
+          return false;
+      }
+    }
+    return false;
+  };
+
   const handleSend = async (text, files) => {
     stopTyping();
+    if (!files.length && await runBotCommand(text)) {
+      atBottomRef.current = true;
+      return;
+    }
     setDividerAt(null);
     setManualUnread(false);
     try {
       const { imageUrl, attachments } = files.length ? await prepareFiles(files) : { imageUrl: null, attachments: [] };
       const { ids, everyone } = scope.type === 'channel' ? extractMentions(text, membersByName) : { ids: [], everyone: false };
+      const blocked = scope.type === 'channel' && server ? guardVerdict(server, { content: text, mentions: ids }, canModerate) : null;
+      if (blocked) throw new Error(blocked);
       dispatch({
         content: text,
         imageUrl,
@@ -366,7 +465,7 @@ const ChatView = forwardRef(function ChatView(
     }
     const newDay = !prev || new Date(prev.createdAt).toDateString() !== new Date(m.createdAt).toDateString();
     if (newDay) rendered.push(<div key={`day-${m.id}`} className="day-separator"><span>{dayLabel(m.createdAt)}</span></div>);
-    const grouped = !newDay && prev && prev.authorId === m.authorId && !m.replyTo
+    const grouped = !newDay && prev && prev.authorId === m.authorId && (prev.bot || null) === (m.bot || null) && !m.replyTo
       && new Date(m.createdAt) - new Date(prev.createdAt) < GROUP_WINDOW_MS;
     rendered.push(
       <MessageItem
@@ -439,6 +538,23 @@ const ChatView = forwardRef(function ChatView(
             <button className="icon-btn" aria-label="Descartar" onClick={() => setFailed((prev) => prev.filter((x) => x.localId !== f.localId))}><X size={14} /></button>
           </div>
         ))}
+        {ephemeral.map((e) => {
+          const bot = e.botId ? botById(e.botId) : null;
+          return (
+            <div key={e.id} className="message-ephemeral" role="status">
+              {bot ? <img src={bot.avatar} alt="" className="message-avatar bot" /> : <span className="message-ephemeral-icon"><Hash size={16} /></span>}
+              <div className="message-content-wrapper">
+                <div className="message-meta">
+                  <span className="message-author static">{bot ? bot.name : 'Comandos'}</span>
+                  {bot && <span className="bot-tag">BOT</span>}
+                  <span className="message-ephemeral-note">só você vê isto</span>
+                  <button className="link-button" onClick={() => setEphemeral((prev) => prev.filter((x) => x.id !== e.id))}>dispensar</button>
+                </div>
+                <div className="message-text"><MarkdownText text={e.text} memberNames={memberNames} myName={user.username} /></div>
+              </div>
+            </div>
+          );
+        })}
       </div>
 
       {!atBottom && (
@@ -464,6 +580,7 @@ const ChatView = forwardRef(function ChatView(
         onError={(msg) => showError('Envio de mensagem', msg)}
         onCreatePoll={disabledReason ? undefined : () => setPollOpen(true)}
         uploadProgress={uploadProgress}
+        commands={botCommands}
       />
 
       {pollOpen && <PollModal onClose={() => setPollOpen(false)} onCreate={createPoll} />}

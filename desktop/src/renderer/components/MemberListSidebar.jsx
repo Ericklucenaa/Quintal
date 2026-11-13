@@ -8,6 +8,7 @@ import { useOverlayUI } from '../context/OverlayUIContext';
 import { roleOf, ROLE_LABELS } from '../services/permissions';
 import { useUserMenu } from './useUserMenu';
 import { defaultAvatar } from '../services/cloud/util';
+import { enabledBots } from '../services/bots/catalog';
 
 const GROUPS = [
   ['owner', 'Dono'],
@@ -16,7 +17,7 @@ const GROUPS = [
 ];
 
 export default function MemberListSidebar() {
-  const { activeServer } = useServer();
+  const { activeServer, openModal } = useServer();
   const { activeVoiceChannel, voiceUsers, voiceChannelUsersMap } = useVoice();
   const { watchStream } = useScreenShare();
   const { getProfile, getStatus, getCustomStatus } = usePresence();
@@ -93,6 +94,7 @@ export default function MemberListSidebar() {
     </div>
   );
 
+  const bots = enabledBots(activeServer);
   const byRole = (role) => members.filter((m) => m.role === role);
   const regular = members.filter((m) => m.role === 'member');
   const online = regular.filter((m) => m.status !== 'offline');
@@ -109,6 +111,22 @@ export default function MemberListSidebar() {
           </div>
         );
       })}
+      {bots.length > 0 && (
+        <div>
+          <div className="member-group-title">Bots — {bots.length}</div>
+          {bots.map((b) => (
+            <button key={b.id} className="member-item bot-member" onClick={() => openModal('serverSettings', 'bots')} title={b.tagline}>
+              <div className="avatar-wrapper">
+                <img src={b.avatar} alt="" className="avatar-img" />
+              </div>
+              <div className="member-info">
+                <span className="member-item-name">{b.name} <span className="bot-tag">BOT</span></span>
+                <span className="member-custom-status">{b.tagline}</span>
+              </div>
+            </button>
+          ))}
+        </div>
+      )}
       {online.length > 0 && (
         <div>
           <div className="member-group-title">Online — {online.length}</div>

@@ -37,6 +37,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
   // Link previews
   fetchLinkPreview: (url) => ipcRenderer.invoke('link:preview', url),
 
+  // Vitrola (títulos e playlists do YouTube e do Spotify)
+  resolveMusic: (link) => ipcRenderer.invoke('music:resolve', link),
+
   // Google sign-in (returns the OAuth credential)
   signInWithGoogleNative: () => ipcRenderer.invoke('auth:google-login'),
 

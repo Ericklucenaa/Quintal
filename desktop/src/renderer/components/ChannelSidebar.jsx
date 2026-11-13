@@ -33,7 +33,8 @@ import {
   Bell,
   BellOff,
   Pencil,
-  FolderPlus
+  FolderPlus,
+  Bot
 } from 'lucide-react';
 import { CHANNEL_TYPES } from '@shared/constants';
 import SoundboardModal from './SoundboardModal';
@@ -687,6 +688,10 @@ export default function ChannelSidebar() {
             <button className="dropdown-item" onClick={() => { setIsMenuOpen(false); setEventsOpen(true); }}>
               <CalendarDays size={16} />
               Eventos
+            </button>
+            <button className="dropdown-item" onClick={() => { setIsMenuOpen(false); openModal('serverSettings', 'bots'); }}>
+              <Bot size={16} />
+              Bots
             </button>
             {isStaff && (
               <button className="dropdown-item" onClick={() => { setIsMenuOpen(false); setCreatingCategory(true); }}>

@@ -69,6 +69,58 @@ service cloud.firestore {
       return isAdminOf(s) || (isMemberOf(s) && roleIn(s) == 'moderator');
     }
 
+    // Permissões por cargo (bots, Vitrola, sala 3D). Dono e admins têm todas; sem mapa
+    // salvo valem os padrões (os mesmos de services/permissions.js).
+    function rolePerms(s) {
+      return s.get('rolePermissions', {
+        'moderator': ['bots.use', 'music.control', 'room.theme', 'room.collective'],
+        'member': ['bots.use', 'room.theme', 'room.collective']
+      });
+    }
+
+    function hasPerm(s, perm) {
+      return isAdminOf(s) || (isMemberOf(s) && perm in rolePerms(s).get(roleIn(s), []));
+    }
+
+    function botOn(s, botId) {
+      return botId in s.get('bots', {});
+    }
+
+    function botCfg(s, botId) {
+      return s.get('bots', {}).get(botId, {}).get('config', {});
+    }
+
+    // Bots que existem no app (o campo `bots` só aceita estes).
+    function validBots(b) {
+      return b.keys().hasOnly(['vitrola', 'porteiro', 'guarda', 'sorte']);
+    }
+
+    // Mensagem de bot: o bot está ligado e a pessoa pode usar bots. O Porteiro posta
+    // em nome de quem acabou de entrar, então só precisa estar ligado.
+    function botMessageOk(s) {
+      return incoming().get('bot', null) == null || (
+        incoming().bot is string
+        && botOn(s, incoming().bot)
+        && (incoming().bot == 'porteiro' || hasPerm(s, 'bots.use'))
+        && incoming().get('botCommand', '').size() <= 120
+      );
+    }
+
+    // Guarda: palavras proibidas, links e excesso de menções (moderadores passam).
+    function passesGuard(s) {
+      return !botOn(s, 'guarda') || isModOf(s) || (
+        (botCfg(s, 'guarda').get('pattern', '') == ''
+          || !incoming().content.lower().matches(botCfg(s, 'guarda').get('pattern', '')))
+        && (botCfg(s, 'guarda').get('blockLinks', false) != true
+          || !incoming().content.lower().matches('(?s).*(https?://|www[.]).*'))
+        && incoming().get('mentions', []).size() <= botCfg(s, 'guarda').get('maxMentions', 50)
+      );
+    }
+
+    function canCreateChannelMessage(s, channelId) {
+      return canPostInChannel(s, channelId) && botMessageOk(s) && passesGuard(s);
+    }
+
     // A channel listed in `channelRoles` is only visible to those roles (plus admins).
     function canViewChannel(s, channelId) {
       return isMemberOf(s) && (
@@ -274,6 +326,9 @@ service cloud.firestore {
         || isValidOwnerEdit()
         || isValidAdminEdit()
         || (isModOf(resource.data) && changedKeys().hasOnly(['mutedIds', 'updatedAt']))
+        || (hasPerm(resource.data, 'bots.manage')
+          && changedKeys().hasOnly(['bots', 'updatedAt'])
+          && validBots(incoming().get('bots', {})))
       );
       allow delete: if isOwnerOf(resource.data);
     }
@@ -362,12 +417,15 @@ service cloud.firestore {
       allow create: if signedIn()
         && incoming().userId == uid()
         && incoming().get('pinned', false) == false
-        && canPostInChannel(serverDoc(incoming().serverId), incoming().channelId);
+        && incoming().content is string
+        && canCreateChannelMessage(serverDoc(incoming().serverId), incoming().channelId);
 
       allow update: if signedIn() && (
         // Author edits their own text.
         (resource.data.userId == uid()
-          && changedKeys().hasOnly(['content', 'editedAt', 'mentions', 'mentionEveryone']))
+          && resource.data.get('bot', null) == null
+          && changedKeys().hasOnly(['content', 'editedAt', 'mentions', 'mentionEveryone'])
+          && passesGuard(serverDoc(resource.data.serverId)))
         // Members toggle their own reactions and poll votes.
         || ((isOwnReactionToggle() || isOwnPollVote())
           && canViewChannel(serverDoc(resource.data.serverId), resource.data.channelId))
@@ -560,6 +618,86 @@ service cloud.firestore {
         && inSameCall(uid(), incoming().toUserId, incoming().channelId);
       allow read: if signedIn() && resource.data.toUserId == uid();
       allow delete: if signedIn() && (resource.data.toUserId == uid() || resource.data.fromUserId == uid());
+    }
+
+    // Vitrola: o que toca em cada canal de voz (doc id = "<serverId>_<channelId>").
+    function musicServer(data) {
+      return serverDoc(data.serverId);
+    }
+
+    function inVoiceChannel(userId, channelId) {
+      return exists(docPath('concord_voice_presence', userId))
+        && presenceOf(userId).get('channelId', null) == channelId;
+    }
+
+    // A faixa passou do fim (com 4 s de folga): qualquer um com permissão pode avançar.
+    function trackOver(data) {
+      return data.get('current', null) != null
+        && data.current.get('paused', false) == false
+        && data.current.get('durationMs', 0) > 0
+        && request.time.toMillis() > data.current.startedAt + data.current.durationMs + 4000;
+    }
+
+    function validMusicSession(sessionId) {
+      return sessionId == incoming().serverId + '_' + incoming().channelId
+        && incoming().hostId == uid()
+        && incoming().keys().hasOnly(['serverId', 'channelId', 'hostId', 'current', 'updatedAt']);
+    }
+
+    match /concord_music/{sessionId} {
+      // ler uma sessão que ainda não existe não revela nada (o app escuta antes de tocar)
+      allow read: if signedIn() && (resource == null || isMemberOf(musicServer(resource.data)));
+      allow create: if signedIn()
+        && validMusicSession(sessionId)
+        && botOn(musicServer(incoming()), 'vitrola')
+        && isMemberOf(musicServer(incoming()))
+        && inVoiceChannel(uid(), incoming().channelId);
+      allow update: if signedIn()
+        && incoming().serverId == resource.data.serverId
+        && incoming().channelId == resource.data.channelId
+        && incoming().keys().hasOnly(['serverId', 'channelId', 'hostId', 'current', 'updatedAt'])
+        && botOn(musicServer(resource.data), 'vitrola')
+        && (
+          hasPerm(musicServer(resource.data), 'music.control')
+          // anfitrião (quem está tocando a fila) ou quem assume quando ele some/a faixa acaba
+          || (isMemberOf(musicServer(resource.data))
+            && inVoiceChannel(uid(), resource.data.channelId)
+            && incoming().hostId == uid()
+            && (resource.data.hostId == uid()
+              || !inVoiceChannel(resource.data.hostId, resource.data.channelId)
+              || trackOver(resource.data)
+              || resource.data.get('current', null) == null))
+          // quem pediu a música atual pode pulá-la
+          || (resource.data.get('current', null) != null
+            && resource.data.current.get('addedBy', '') == uid()
+            && inVoiceChannel(uid(), resource.data.channelId)
+            && changedKeys().hasOnly(['current', 'hostId', 'updatedAt'])
+            && incoming().hostId == uid())
+        );
+      allow delete: if signedIn() && hasPerm(musicServer(resource.data), 'music.control');
+    }
+
+    match /concord_music_queue/{itemId} {
+      allow read: if signedIn() && isMemberOf(musicServer(resource.data));
+      allow create: if signedIn()
+        && incoming().id == itemId
+        && incoming().addedBy == uid()
+        && incoming().sessionId == incoming().serverId + '_' + incoming().channelId
+        && incoming().kind in ['youtube', 'spotify']
+        && incoming().ref is string && incoming().ref.size() <= 80
+        && incoming().get('title', '').size() <= 200
+        && botOn(musicServer(incoming()), 'vitrola')
+        && isMemberOf(musicServer(incoming()));
+      allow update: if signedIn()
+        && changedKeys().hasOnly(['order'])
+        && hasPerm(musicServer(resource.data), 'music.control');
+      // Sai da fila: quem pediu, quem controla, ou quem começa a tocá-la (mesma transação).
+      allow delete: if signedIn() && (
+        resource.data.addedBy == uid()
+        || hasPerm(musicServer(resource.data), 'music.control')
+        || (isMemberOf(musicServer(resource.data))
+          && getAfter(docPath('concord_music', resource.data.sessionId)).data.get('current', {}).get('queueId', '') == itemId)
+      );
     }
 
     match /concord_soundboard/{soundId} {

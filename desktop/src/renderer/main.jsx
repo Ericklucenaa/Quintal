@@ -9,6 +9,8 @@ import './styles/v12.css';
 import './styles/themes.css';
 import './styles/appearance.css';
 import './styles/room3d.css';
+import './styles/room3d-games.css';
+import './styles/bots.css';
 import './styles/quintal.css';
 import { applyAppearance } from './services/appearance';
 

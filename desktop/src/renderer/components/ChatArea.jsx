@@ -123,6 +123,7 @@ export default function ChatArea({ onToggleMemberList }) {
           disabledReason={canPost ? null : 'Este é um canal de avisos: apenas moderadores podem enviar mensagens.'}
           placeholder={`Conversar em #${activeChannel.name}`}
           onJoinInvite={joinByCode}
+          server={activeServer}
           emptyState={(
             <div className="channel-welcome">
               <div className="channel-welcome-icon"><Hash size={32} /></div>

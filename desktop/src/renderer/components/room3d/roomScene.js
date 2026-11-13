@@ -3,7 +3,10 @@
 // Tudo é gerado por código: nenhum modelo ou textura externa.
 import * as THREE from 'three';
 import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeometry.js';
-import { ROOM, SCREEN, SEATS } from '../../services/room3d/layout';
+import { COLLIDERS, GAME_TABLES, ROOM, SCREEN, SEATS } from '../../services/room3d/layout';
+import {
+  backShelves, barCounter, boardTable, danceFloor, foosballTable, jukebox, pendantLamps, pergola, pingPongTable, poolTable
+} from './barScene';
 
 const mat = (color, opts = {}) => new THREE.MeshStandardMaterial({ color, roughness: 0.85, metalness: 0, ...opts });
 
@@ -222,7 +225,7 @@ function surroundings(theme, anim) {
       const moon = new THREE.Mesh(new THREE.SphereGeometry(4, 24, 16), new THREE.MeshBasicMaterial({ color: '#fff2d6', fog: false }));
       moon.position.set(-30, 26, -110);
       group.add(moon);
-      [[-14, -10], [14, -10], [-15, 4], [15, 6], [-12, 13], [12, 14]].forEach(([x, z], i) => {
+      [[-22, -15], [22, -15], [-23, 4], [23, 6], [-20, 19], [20, 20]].forEach(([x, z], i) => {
         const p = palmTree(6 + (i % 3));
         p.position.set(x, -0.45, z);
         p.rotation.y = i;
@@ -236,7 +239,7 @@ function surroundings(theme, anim) {
       group.add(ground(snowy ? '#eef3f8' : '#35502c', 160, -0.45));
       for (let i = 0; i < 70; i++) {
         const a = rand() * Math.PI * 2;
-        const r = 14 + rand() * 26;
+        const r = 23 + rand() * 26;
         const t = pineTree(5 + rand() * 6, snowy ? '#2f5d46' : '#24452f', '#4a3220', snowy);
         t.position.set(Math.sin(a) * r, -0.45, Math.cos(a) * r);
         group.add(t);
@@ -249,7 +252,7 @@ function surroundings(theme, anim) {
       for (let i = 0; i < 26; i++) {
         const c = new THREE.Mesh(new THREE.TorusGeometry(1 + rand() * 3, 0.25, 6, 18), craterMat);
         const a = rand() * Math.PI * 2;
-        const r = 14 + rand() * 50;
+        const r = 24 + rand() * 50;
         c.rotation.x = Math.PI / 2;
         c.position.set(Math.sin(a) * r, -0.4, Math.cos(a) * r);
         group.add(c);
@@ -282,7 +285,7 @@ function surroundings(theme, anim) {
       }, [2, 3]);
       for (let i = 0; i < 46; i++) {
         const a = rand() * Math.PI * 2;
-        const r = 20 + rand() * 30;
+        const r = 30 + rand() * 30;
         const h = 6 + rand() * 22;
         const b = new THREE.Mesh(new THREE.BoxGeometry(3 + rand() * 4, h, 3 + rand() * 4), new THREE.MeshStandardMaterial({ color: '#ffffff', map: windowTex, emissive: '#ffffff', emissiveMap: windowTex, emissiveIntensity: 0.6, roughness: 0.9 }));
         b.position.set(Math.sin(a) * r, h / 2 - 0.45, Math.cos(a) * r);
@@ -296,7 +299,7 @@ function surroundings(theme, anim) {
       const m2 = new THREE.MeshBasicMaterial({ color: '#2c1e38' });
       for (let i = 0; i < 18; i++) {
         const a = (i / 18) * Math.PI * 2;
-        const r = 34 + (i % 3) * 5;
+        const r = 46 + (i % 3) * 6;
         const h = 5 + ((i * 7) % 5);
         const cone = new THREE.Mesh(new THREE.ConeGeometry(7 + (i % 4), h, 5), i % 2 ? m1 : m2);
         cone.position.set(Math.sin(a) * r, h / 2 - 3.5, Math.cos(a) * r);
@@ -464,9 +467,9 @@ function stringLights(group, from, to, sag, bulbMat) {
   }
 }
 
-function fireplace(theme, anim) {
+function fireplace(theme, anim, at) {
   const fire = new THREE.Group();
-  fire.position.set(0, 0, 3.2);
+  fire.position.set(at.x, 0, at.z);
   if (theme.fire === 'hologram') {
     const base = new THREE.Mesh(new THREE.CylinderGeometry(0.85, 0.95, 0.3, 24), mat('#2b3346', { metalness: 0.5, roughness: 0.4 }));
     base.position.y = 0.15;
@@ -539,9 +542,9 @@ function particles(kind, anim) {
       positions[i * 3 + 1] = Math.sin(e) * r;
       positions[i * 3 + 2] = Math.sin(a) * Math.cos(e) * r;
     } else {
-      positions[i * 3] = (rand() - 0.5) * 30;
+      positions[i * 3] = (rand() - 0.5) * 40;
       positions[i * 3 + 1] = rand() * (kind === 'fireflies' ? 3 : 12);
-      positions[i * 3 + 2] = (rand() - 0.5) * 26;
+      positions[i * 3 + 2] = (rand() - 0.5) * 34;
     }
   }
   const geo = new THREE.BufferGeometry();
@@ -596,28 +599,36 @@ export function drawPlaceholder(c, title, subtitle) {
   g.fillText(subtitle, c.width / 2, c.height / 2 + 50);
 }
 
+const colliderById = (id) => COLLIDERS.find((c) => c.id === id);
+
 /**
- * Monta a cena do tema. Devolve { scene, screenMesh, update(dt) }.
+ * Monta a cena do tema. `state` é lido a cada quadro (música tocando, Vitrola ligada)
+ * para a pista e a vitrola reagirem sem reconstruir a cena.
+ * Devolve { scene, screenMesh, update(dt) }.
  */
-export function buildRoom(theme) {
+export function buildRoom(theme, state = {}) {
   const anim = [];
   const scene = new THREE.Scene();
-  scene.fog = new THREE.Fog(theme.fog.color, theme.fog.near, theme.fog.far);
+  scene.fog = new THREE.Fog(theme.fog.color, theme.fog.near * 1.4, theme.fog.far * 1.4);
   scene.add(sky(theme.sky));
   scene.add(surroundings(theme, anim));
 
   scene.add(new THREE.HemisphereLight(theme.hemi.sky, theme.hemi.ground, theme.hemi.intensity));
   const sun = new THREE.DirectionalLight(theme.sun.color, theme.sun.intensity);
-  sun.position.set(...theme.sun.position);
+  sun.position.set(theme.sun.position[0] * 1.6, theme.sun.position[1] * 1.6, theme.sun.position[2] * 1.6);
   sun.castShadow = true;
-  sun.shadow.mapSize.set(1536, 1536);
-  Object.assign(sun.shadow.camera, { left: -12, right: 12, top: 12, bottom: -12 });
-  sun.shadow.bias = -0.0008;
+  sun.shadow.mapSize.set(2048, 2048);
+  Object.assign(sun.shadow.camera, { left: -19, right: 19, top: 17, bottom: -17, far: 80 });
+  sun.shadow.bias = -0.0006;
+  sun.shadow.normalBias = 0.02;
   scene.add(sun);
 
+  // Piso do deck e base
   const deckW = ROOM.maxX - ROOM.minX;
   const deckD = ROOM.maxZ - ROOM.minZ;
-  const floor = new THREE.Mesh(new THREE.PlaneGeometry(deckW + 0.6, deckD + 0.6), floorMaterial(theme.floor));
+  const floorMat = floorMaterial(theme.floor);
+  if (floorMat.map) floorMat.map.repeat.set(7, 5.5);
+  const floor = new THREE.Mesh(new THREE.PlaneGeometry(deckW + 0.6, deckD + 0.6), floorMat);
   floor.rotation.x = -Math.PI / 2;
   floor.receiveShadow = true;
   scene.add(floor);
@@ -626,25 +637,24 @@ export function buildRoom(theme) {
   scene.add(under);
   scene.add(railing(theme));
 
-  // Parede com o telão. A tela fica 6 cm à frente da moldura e usa deslocamento de
-  // polígono: com a superfície a 1 cm, placas com buffer de profundidade de menor
-  // precisão faziam a moldura "brigar" com a imagem e a TV piscava.
-  const wall = box(deckW + 0.6, 4.6, 0.3, mat(theme.wall), 0.04);
-  wall.position.set(0, 2.3, ROOM.minZ - 0.2);
+  // Parede norte com o telão. A tela fica 6 cm à frente da moldura e usa deslocamento
+  // de polígono: com a superfície a 1 cm a moldura "brigava" com a imagem e a TV piscava.
+  const wall = box(deckW + 0.6, 6.2, 0.3, mat(theme.wall), 0.04);
+  wall.position.set(0, 3.1, ROOM.minZ - 0.2);
   scene.add(wall);
-  const frame = box(SCREEN.width + 0.3, SCREEN.height + 0.3, 0.14, mat('#1e1d24', { roughness: 0.4 }), 0.05);
+  const frame = box(SCREEN.width + 0.36, SCREEN.height + 0.36, 0.14, mat('#1e1d24', { roughness: 0.4 }), 0.05);
   frame.position.set(SCREEN.x, SCREEN.y, SCREEN.z - 0.13);
   scene.add(frame);
   const screenMat = new THREE.MeshBasicMaterial({ color: '#ffffff', toneMapped: false, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 });
   const screenMesh = new THREE.Mesh(new THREE.PlaneGeometry(SCREEN.width, SCREEN.height), screenMat);
   screenMesh.position.set(SCREEN.x, SCREEN.y, SCREEN.z);
   scene.add(screenMesh);
-  const rack = box(4.2, 0.45, 0.55, mat('#2e2633'), 0.05);
-  rack.position.set(0, 0.23, SCREEN.z + 0.45);
-  scene.add(rack);
+  const stage = box(10, 0.3, 1.2, mat('#2e2633'), 0.04);
+  stage.position.set(0, 0.15, SCREEN.z + 0.75);
+  scene.add(stage);
 
-  // Tapete, sofás e mesa
-  const rug = new THREE.Mesh(new THREE.PlaneGeometry(5.4, 3.6), mat('#ffffff', {
+  // Cinema: tapete, sofás e mesa de centro
+  const rug = new THREE.Mesh(new THREE.PlaneGeometry(8.2, 4.2), mat('#ffffff', {
     map: canvasTexture(256, (g) => {
       g.fillStyle = theme.rug.base; g.fillRect(0, 0, 256, 256);
       g.strokeStyle = theme.rug.line; g.lineWidth = 6; g.strokeRect(14, 14, 228, 228);
@@ -655,66 +665,103 @@ export function buildRoom(theme) {
     polygonOffsetUnits: -1
   }));
   rug.rotation.x = -Math.PI / 2;
-  rug.position.set(0, 0.03, -2.2);
+  rug.position.set(0, 0.03, -9.6);
   rug.receiveShadow = true;
   scene.add(rug);
-  const center = sofa(3.3, theme.sofa);
-  center.position.set(0, 0, -1.2);
-  scene.add(center);
-  const west = sofa(2.6, theme.sofa);
-  west.position.set(-2.75, 0, -2.3);
-  west.rotation.y = -Math.PI / 2;
-  scene.add(west);
-  const east = sofa(2.6, theme.sofa);
-  east.position.set(2.75, 0, -2.3);
-  east.rotation.y = Math.PI / 2;
-  scene.add(east);
-  const table = box(1.6, 0.36, 0.8, mat(theme.table), 0.06);
-  table.position.set(0, 0.18, -2.9);
+  const sofaAt = (id, width, rotY) => {
+    const c = colliderById(id);
+    const so = sofa(width, theme.sofa);
+    so.position.set(c.x, 0, c.z);
+    so.rotation.y = rotY;
+    scene.add(so);
+  };
+  sofaAt('sofa-centro', 4.2, 0);
+  sofaAt('sofa-oeste', 2.6, -Math.PI / 2);
+  sofaAt('sofa-leste', 2.6, Math.PI / 2);
+  const ct = colliderById('mesa-centro');
+  const table = box(ct.w, ct.h, ct.d, mat(theme.table), 0.06);
+  table.position.set(ct.x, ct.h / 2, ct.z);
   scene.add(table);
 
-  scene.add(fireplace(theme, anim));
-  SEATS.filter((s) => s.stool).forEach((s) => {
+  // Bar
+  scene.add(barCounter(theme, colliderById('balcao')));
+  scene.add(backShelves(theme, colliderById('prateleira')));
+  scene.add(pendantLamps([13.2], [-5, -2.5, 0, 2.5], 2.4, theme));
+  const barLight = new THREE.PointLight('#ffc98a', 6, 10, 1.6);
+  barLight.position.set(12.4, 2.6, -1.5);
+  scene.add(barLight);
+
+  // Banquetas (bar e fogueira) e cadeiras do lounge
+  SEATS.filter((s) => s.stool && !s.table).forEach((s) => {
     const st = stool(theme.sofa, Boolean(s.high));
     st.position.set(s.x, 0, s.z);
     scene.add(st);
   });
+  scene.add(fireplace(theme, anim, colliderById('fogueira')));
+  sofaAt('sofa-lounge', 3.3, 0);
+  sofaAt('sofa-lounge-2', 2.6, Math.PI / 2);
+  const lt = colliderById('mesa-lounge');
+  const loungeTable = box(lt.w, lt.h, lt.d, mat(theme.table), 0.06);
+  loungeTable.position.set(lt.x, lt.h / 2, lt.z);
+  scene.add(loungeTable);
 
-  const counter = box(1.0, 1.05, 5.2, mat(theme.counter.body), 0.06);
-  counter.position.set(7.6, 0.53, 0.5);
-  scene.add(counter);
-  const top = box(1.2, 0.08, 5.4, mat(theme.counter.top, { roughness: 0.5 }), 0.03);
-  top.position.set(7.55, 1.09, 0.5);
-  scene.add(top);
+  // Pista, pergolado com luzes e vitrola
+  scene.add(danceFloor(anim, state));
+  const pillars = COLLIDERS.filter((c) => c.id.startsWith('pilar-'));
+  scene.add(pergola(theme, pillars));
+  scene.add(jukebox(anim, state));
 
-  [[-8.2, -6.2, 1.1], [8.2, -6.2, 1.1], [-8.2, 6.2, 0.9], [8.2, 6.2, 0.9]].forEach(([x, z, s]) => {
-    const p = plant(theme.plant, s);
-    p.position.set(x, 0, z);
-    scene.add(p);
+  // Jogos
+  GAME_TABLES.forEach((t) => {
+    if (t.kind === 'chess' || t.kind === 'checkers') scene.add(boardTable(theme, t, t.kind));
+    else if (t.kind === 'pool') scene.add(poolTable(t));
+    else if (t.kind === 'foosball') scene.add(foosballTable(t));
+    else if (t.kind === 'pingpong') scene.add(pingPongTable(t));
+  });
+  const gameLight = new THREE.PointLight(theme.lights.color, 3, 11, 1.8);
+  gameLight.position.set(-11.4, 3.2, -1.5);
+  scene.add(gameLight);
+
+  // Plantas nos cantos
+  [['vaso-no', 1.1], ['vaso-ne', 1.1], ['vaso-so', 0.9], ['vaso-se', 0.9]].forEach(([id, sc]) => {
+    const c = colliderById(id);
+    const pl = plant(theme.plant, sc);
+    pl.position.set(c.x, 0, c.z);
+    scene.add(pl);
   });
 
-  // Luzes decorativas no contorno (nenhum fio na frente do telão)
+  // Luzinhas: no pergolado e no contorno (nenhum fio na frente do telão)
   if (theme.lights.style !== 'none') {
-    const corners = [[-8.8, -6.8], [8.8, -6.8], [8.8, 6.8], [-8.8, 6.8]];
-    const poleMat = mat('#3a2a20');
-    corners.forEach(([x, z]) => {
-      const pole = box(0.12, 3.6, 0.12, poleMat, 0.03);
-      pole.position.set(x, 1.8, z);
-      scene.add(pole);
-    });
     const bulbs = theme.lights.style === 'lanterns'
       ? (theme.lights.palette || [theme.lights.color]).map((c) => new THREE.MeshBasicMaterial({ color: c, toneMapped: false, transparent: true, opacity: 0.9 }))
       : new THREE.MeshBasicMaterial({ color: theme.lights.color, toneMapped: false });
     const lights = new THREE.Group();
-    const hp = (x, z) => new THREE.Vector3(x, 3.55, z);
-    stringLights(lights, hp(-8.8, -6.8), hp(-8.8, 6.8), 0.7, bulbs);
-    stringLights(lights, hp(8.8, -6.8), hp(8.8, 6.8), 0.7, bulbs);
-    stringLights(lights, hp(-8.8, 6.8), hp(8.8, 6.8), 0.6, bulbs);
+    const y = 3.55;
+    const hp = (x, z, h = y) => new THREE.Vector3(x, h, z);
+    // diagonais e laterais do pergolado (logo abaixo das vigas)
+    const py = pillars[0].h - 0.05;
+    stringLights(lights, hp(-8, -6, py), hp(8, 6, py), 0.7, bulbs);
+    stringLights(lights, hp(8, -6, py), hp(-8, 6, py), 0.7, bulbs);
+    stringLights(lights, hp(-8, -6, py), hp(-8, 6, py), 0.45, bulbs);
+    stringLights(lights, hp(8, -6, py), hp(8, 6, py), 0.45, bulbs);
+    // contorno sul
+    const poleMat = mat('#3a2a20');
+    [[-15.6, 12.6], [-5.2, 12.6], [5.2, 12.6], [15.6, 12.6]].forEach(([x, z]) => {
+      const pole = box(0.12, 3.6, 0.12, poleMat, 0.03);
+      pole.position.set(x, 1.8, z);
+      scene.add(pole);
+    });
+    stringLights(lights, hp(-15.6, 12.6), hp(-5.2, 12.6), 0.6, bulbs);
+    stringLights(lights, hp(-5.2, 12.6), hp(5.2, 12.6), 0.6, bulbs);
+    stringLights(lights, hp(5.2, 12.6), hp(15.6, 12.6), 0.6, bulbs);
     scene.add(lights);
   }
-  const warm = new THREE.PointLight(theme.lights.color, 4, 14, 1.8);
-  warm.position.set(0, 3.0, 0);
+  const warm = new THREE.PointLight(theme.lights.color, 6, 18, 1.6);
+  warm.position.set(0, 4.2, -1);
   scene.add(warm);
+  const loungeLight = new THREE.PointLight(theme.lights.color, 3, 10, 1.8);
+  loungeLight.position.set(11, 3, 9.5);
+  scene.add(loungeLight);
 
   const p = particles(theme.particles, anim);
   if (p) scene.add(p);

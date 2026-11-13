@@ -167,3 +167,18 @@ describe('áudio espacial', () => {
     expect(spatialGain(1000)).toBe(spatialGain(SPATIAL.maxDistance));
   });
 });
+
+describe('bar maior', () => {
+  it('cabem 24 pessoas chegando ao mesmo tempo, cada uma num lugar livre', () => {
+    expect(SPAWNS.length).toBeGreaterThanOrEqual(24);
+    const keys = new Set(SPAWNS.map((p) => `${p.x},${p.z}`));
+    expect(keys.size).toBe(SPAWNS.length);
+  });
+
+  it('as cadeiras das mesas de jogo apontam para a mesa e liberam a saída', () => {
+    SEATS.filter((s) => s.table).forEach((s) => {
+      expect(insideAnyCollider(s.exit.x, s.exit.z)).toBe(false);
+      expect(Math.abs(Math.abs(s.yaw) - Math.PI / 2)).toBeLessThan(1e-9);
+    });
+  });
+});

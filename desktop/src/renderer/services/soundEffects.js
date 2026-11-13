@@ -579,6 +579,31 @@ const APP_SOUNDS = {
   },
   'room-theme': (v) => {
     for (let i = 0; i < 8; i++) v.tone({ freq: rand(1400, 3600), t: i * 0.045, d: 0.25, g: 0.04, attack: 0.002 });
+  },
+  // Peça no tabuleiro: batidinha de madeira.
+  'game-move': (v) => v.noise({ d: 0.05, g: 0.3, type: 'bandpass', freq: 1800, q: 6, attack: 0.001 }),
+  // Captura: duas batidas.
+  'game-capture': (v) => {
+    v.noise({ d: 0.05, g: 0.3, type: 'bandpass', freq: 1500, q: 6, attack: 0.001 });
+    v.noise({ t: 0.07, d: 0.05, g: 0.26, type: 'bandpass', freq: 2100, q: 6, attack: 0.001 });
+  },
+  // Tacada de sinuca: estalo seco.
+  'game-cue': (v) => v.noise({ d: 0.04, g: 0.4, type: 'highpass', freq: 2400, attack: 0.001 }),
+  // Ponto/gol: duas notas.
+  'game-point': (v) => v.seq([['E5', 0, 0.12], ['A5', 0.1, 0.22]], { type: 'triangle', g: 0.13 }),
+  // Fim de partida: fanfarra curta.
+  'game-over': (v) => v.seq([['C5', 0, 0.14], ['E5', 0.12, 0.14], ['G5', 0.24, 0.14], ['C6', 0.36, 0.4]], { type: 'triangle', g: 0.14 }),
+  // Alguém puxou uma ação coletiva: chamado animado.
+  'collective-start': (v) => v.seq([['G5', 0, 0.1], ['G5', 0.12, 0.1], ['D6', 0.24, 0.26]], { type: 'square', g: 0.06 }),
+  // Brinde: tim-tim de copos.
+  'collective-toast': (v) => {
+    v.bell('A6', 0, 0.6, 0.07, [1, 2.7, 5.1]);
+    v.bell('C7', 0.06, 0.5, 0.06, [1, 2.7, 5.1]);
+  },
+  // Foto: obturador.
+  'collective-photo': (v) => {
+    v.noise({ d: 0.03, g: 0.35, type: 'highpass', freq: 3000, attack: 0.001 });
+    v.noise({ t: 0.06, d: 0.05, g: 0.25, type: 'bandpass', freq: 1200, q: 2, attack: 0.001 });
   }
 };
 

@@ -4,6 +4,8 @@ import * as servers from '../services/cloud/servers';
 import { findUserByNickname } from '../services/cloud/users';
 import { canViewChannel } from '../services/permissions';
 import { logWarn } from '../services/log';
+import { sendMessage } from '../services/cloud/messages';
+import { botConfig, isBotEnabled, welcomeText } from '../services/bots/catalog';
 
 const ServerContext = createContext(null);
 
@@ -52,7 +54,7 @@ export function ServerProvider({ children }) {
 
   const openModal = useCallback((name, data = null) => {
     // Settings may open on a given tab: openModal('settings', 'audio').
-    setModalState((prev) => ({ ...prev, [name]: name === 'settings' && typeof data === 'string' ? data : true }));
+    setModalState((prev) => ({ ...prev, [name]: (name === 'settings' || name === 'serverSettings') && typeof data === 'string' ? data : true }));
     if (name === 'invite') setSelectedChannelForInvite(data);
     if (name === 'createChannel') setCategoryForNewChannel(data);
   }, []);
@@ -297,11 +299,24 @@ export function ServerProvider({ children }) {
     const target = server.channels.find((c) => c.id === invite.channelId)
       || server.channels.find((c) => c.type === 'text');
     setPendingSelect({ serverId: server.id, channelId: target?.id });
+    // Porteiro: quem acabou de entrar publica a mensagem de boas-vindas (como bot).
+    if (!alreadyMember && isBotEnabled(server, 'porteiro') && user) {
+      const cfg = botConfig(server, 'porteiro');
+      const channel = server.channels.find((c) => c.id === cfg.channelId && c.type === 'text') || server.channels.find((c) => c.type === 'text');
+      if (channel) {
+        const { committed } = sendMessage(
+          { type: 'channel', serverId: server.id, channelId: channel.id },
+          user,
+          { content: welcomeText(cfg.message, { username: user.username, serverName: server.name }), bot: 'porteiro', botCommand: 'entrou no servidor', mentions: [] }
+        );
+        committed.catch((err) => logWarn('porteiro', err));
+      }
+    }
     return {
       message: alreadyMember ? `Você já faz parte de "${server.name}".` : `Você entrou no servidor "${server.name}"!`,
       server
     };
-  }, [userId]);
+  }, [userId, user]);
 
   const respondInvite = async (inviteId, action) => {
     const invite = pendingInvites.find((i) => i.id === inviteId);
