@@ -1,10 +1,10 @@
 {
-  "version": "1.3.0",
-  "name": "Quintal v1.3.0",
-  "releaseDate": "2026-11-12",
-  "downloadUrl": "https://github.com/Ericklucenaa/Quintal/releases/download/v1.3.0/Quintal-Setup-1.3.0.exe",
-  "sha256": "8e3d7b016186d59048dfe08c9cca123c268b8078e75d138c598f4397d0dccfad",
+  "version": "1.4.0",
+  "name": "Quintal v1.4.0",
+  "releaseDate": "2026-11-13",
+  "downloadUrl": "https://github.com/Ericklucenaa/Quintal/releases/download/v1.4.0/Quintal-Setup-1.4.0.exe",
+  "sha256": "e18de8def5c1e791e5daa313a12b382b5555f46e52adbac4acf5c90ef704a621",
   "webUrl": "https://concord-3af70.web.app",
-  "releaseNotes": "O Concord agora se chama Quintal: sala 3D com avatares personalizáveis, temas, interações, sons e um visual novo.",
+  "releaseNotes": "Quintal 1.4: bots no servidor (Vitrola para ouvir YouTube e Spotify juntos na chamada, Porteiro, Guarda e Sorte), permissões por cargo, a sala 3D virou o Bar do Quintal com xadrez, damas, sinuca, pingue-pongue e pebolim, ações coletivas e avatares novos com muito mais opções de visual.",
   "isMandatory": true
 }
