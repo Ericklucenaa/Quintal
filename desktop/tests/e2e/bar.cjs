@@ -173,6 +173,71 @@ app.whenReady().then(async () => {
     await jsA(`window.__room3d.leaveTable('damas-1'); window.__room3d.openTable(null); return true;`);
     await jsB(`window.__room3d.leaveTable('damas-1'); return true;`);
 
+    // --- Reversi e Lig 4 (as 4 mesas pequenas viraram 4 jogos diferentes) -----------
+    await jsA(`window.__room3d.sitAtTable('reversi-1', 0); window.__room3d.openTable('reversi-1'); return true;`);
+    await jsB(`window.__room3d.sitAtTable('reversi-1', 1); return true;`);
+    await waitA(`window.__room3d.table('reversi-1').status === 'playing'`, 'reversi começou', 10000);
+    const rv = await jsA(`return window.__room3d.reversiMove('reversi-1', 19)`); // cerca a clara em (3,3)
+    await waitB(`window.__room3d.table('reversi-1').data.turn === 1 && window.__room3d.table('reversi-1').data.last === 19`, 'B vê a jogada de reversi', 8000);
+    const rvBad = await jsA(`return window.__room3d.reversiMove('reversi-1', 0)`);
+    check('reversi: jogada chega no outro lado e lance fora da vez é recusado', rv === true && rvBad === false);
+    await sleep(600);
+    await shot(A, 'b10b_reversi');
+    await jsA(`window.__room3d.leaveTable('reversi-1'); return true;`);
+    await jsB(`window.__room3d.leaveTable('reversi-1'); return true;`);
+    await jsA(`window.__room3d.sitAtTable('lig4-1', 0); window.__room3d.openTable('lig4-1'); return true;`);
+    await jsB(`window.__room3d.sitAtTable('lig4-1', 1); return true;`);
+    await waitA(`window.__room3d.table('lig4-1').status === 'playing'`, 'lig 4 começou', 10000);
+    await jsA(`return window.__room3d.connect4Move('lig4-1', 3)`);
+    await waitB(`window.__room3d.table('lig4-1').data.board[38] === 'a'`, 'B vê a peça cair no fundo da coluna', 8000);
+    await jsB(`return window.__room3d.connect4Move('lig4-1', 3)`);
+    await waitA(`window.__room3d.table('lig4-1').data.board[31] === 'b'`, 'A vê a peça de B empilhar', 8000);
+    check('lig 4: as peças caem e empilham nos dois lados', true);
+    await waitA(`document.querySelector('.game-panel .gp-status')?.textContent.includes('Sua vez') && document.querySelectorAll('.gp-c4-disc.b').length === 1`, 'painel de A mostra a peça de B e a vez de A', 6000);
+    check('lig 4: o painel de quem joga atualiza com o lance do outro', true);
+    await sleep(600);
+    await shot(A, 'b10c_lig4');
+    await jsA(`window.__room3d.openTable(null); return true;`);
+    await jsA('window.__room3d.teleport(5.4, 6.6); window.__room3d.setCamYaw(0); window.__room3d.setCamOrbit(0.5, 4.5); return true;');
+    await sleep(800);
+    await shot(A, 'b10d_mesas_3d');
+    await jsA(`window.__room3d.leaveTable('lig4-1'); return true;`);
+    await jsB(`window.__room3d.leaveTable('lig4-1'); return true;`);
+
+    // --- Truco: mesa de 4, variante escolhida com a mesa parada --------------------
+    await jsA(`window.__room3d.sitAtTable('truco-1', 0); window.__room3d.openTable('truco-1'); return true;`);
+    await jsB(`window.__room3d.sitAtTable('truco-1', 1); return true;`);
+    await waitB(`window.__room3d.table('truco-1').players[0] && window.__room3d.table('truco-1').players[1]`, 'B vê os dois sentados no truco', 8000);
+    await jsB(`return window.__room3d.trucoVariant('truco-1', 'mineiro')`);
+    await waitA(`window.__room3d.table('truco-1').opts?.variant === 'mineiro'`, 'A vê a variante mineira', 8000);
+    await waitA(`document.querySelector('.tr-variant-btn.on')?.textContent.includes('mineiro')`, 'painel de A marca a variante mineira', 6000);
+    const trucoWaiting = await jsA(`return window.__room3d.table('truco-1').status`);
+    check('truco: 4 lugares, só começa com a mesa completa e a variante vale para todos', trucoWaiting === 'waiting', trucoWaiting);
+    await sleep(600);
+    await shot(A, 'b10e_truco_painel');
+    await jsA(`window.__room3d.openTable(null); window.__room3d.leaveTable('truco-1'); return true;`);
+    await jsB(`window.__room3d.leaveTable('truco-1'); return true;`);
+    await jsA('window.__room3d.teleport(8.8, 4.2); window.__room3d.setCamYaw(Math.PI); window.__room3d.setCamOrbit(0.55, 4); return true;');
+    await sleep(800);
+    await shot(A, 'b10f_truco_3d');
+
+    // --- Alvo: pegar a bola e acertar; o placar chega para os dois -----------------
+    await jsA('window.__room3d.teleport(9.2, -7.9); return true;');
+    await sleep(400);
+    await jsA('window.__room3d.grab(); return true;');
+    await waitA(`Object.values(window.__room3d.objects()).some((o) => o.holder)`, 'A pegou a bola', 5000);
+    await jsA(`window.__room3d.teleport(8.1, -7.6); window.__room3d.setCamYaw(Math.PI / 2); return true;`);
+    await sleep(500);
+    await jsA(`window.__room3d.throwAt(11.6, -7.6); return true;`);
+    await waitA(`window.__room3d.darts()?.last?.score > 0`, 'A acerta o alvo', 8000);
+    await waitB(`window.__room3d.darts()?.last?.score > 0`, 'B vê o acerto no alvo', 8000);
+    const dartA = await jsA(`return JSON.stringify(window.__room3d.darts())`);
+    const dartB = await jsB(`return JSON.stringify(window.__room3d.darts())`);
+    check('alvo: o acerto conta pontos e o placar é o mesmo para os dois', dartA === dartB, `${dartA} | ${dartB}`);
+    await jsA('window.__room3d.setCamOrbit(0.35, 4.5); return true;');
+    await sleep(700);
+    await shot(A, 'b10g_alvo');
+
     // --- Sinuca ---------------------------------------------------------------
     await jsA(`window.__room3d.sitAtTable('sinuca', 0); window.__room3d.openTable('sinuca'); return true;`);
     await jsB(`window.__room3d.sitAtTable('sinuca', 1); window.__room3d.openTable('sinuca'); return true;`);
@@ -194,7 +259,10 @@ app.whenReady().then(async () => {
     await waitA(`window.__room3d.table('pingpong').status === 'playing'`, 'ping-pong começou', 10000);
     await sleep(2500);
     await shot(B, 'b13_pingpong');
-    await sleep(6000);
+    // a primeira jogada demora mais ou menos conforme a bola quica: espera o placar andar (até 20 s)
+    try {
+      await waitB(`window.__room3d.table('pingpong').data.score.join('x') !== '0x0'`, 'placar do ping-pong anda', 20000);
+    } catch { /* o diagnóstico abaixo mostra o estado */ }
     const ppScore = await jsB(`return window.__room3d.table('pingpong').data.score.join('x')`);
     if (ppScore === '0x0') {
       console.log('FAIL  diagnóstico A ' + JSON.stringify(await jsA(`return { t: window.__room3d.table('pingpong'), me: window.__room3d.me(), frame: window.__room3d.gameFrame('pingpong'), seat: window.__room3d.hubSeat() }`)));

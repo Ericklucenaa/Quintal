@@ -2,7 +2,7 @@
 // (passo fixo de 1/120 s): gravidade, quique no chão e nos móveis, atrito e paredes.
 // Quem arremessa simula e decide os acertos; os outros simulam a mesma trajetória
 // a partir da mensagem de arremesso e recebem a posição final ("pousou") para acertar diferenças.
-import { COLLIDERS, ROOM, THROWABLE_SPAWNS } from './layout';
+import { COLLIDERS, DARTBOARD, DART_RINGS, ROOM, THROWABLE_SPAWNS } from './layout';
 import { GRAVITY } from './movement';
 
 export const OBJECT_RADIUS = 0.17;
@@ -25,14 +25,39 @@ export function initialObjects() {
 
 export const speedOf = (o) => Math.hypot(o.vx, o.vy, o.vz);
 
+/** Pontos de um acerto no alvo pela distância ao centro (0 = fora). */
+export function dartScore(dist) {
+  const ring = DART_RINGS.find(([r]) => dist <= r);
+  return ring ? ring[1] : 0;
+}
+
 function stepOnce(o, dt, g) {
   const prevY = o.y;
+  const prevX = o.x;
+  const prevZ = o.z;
   o.vy -= g * dt;
   o.x += o.vx * dt;
   o.y += o.vy * dt;
   o.z += o.vz * dt;
   const r = OBJECT_RADIUS;
   let onSurface = false;
+
+  // alvo: a bola que cruza a face (indo para leste) dentro do círculo acerta e volta (igual para todos)
+  const face = DARTBOARD.x - DARTBOARD.t / 2;
+  if (o.vx > 0 && prevX + OBJECT_RADIUS <= face && o.x + OBJECT_RADIUS > face) {
+    const k = (face - OBJECT_RADIUS - prevX) / (o.x - prevX);
+    const cy = prevY + (o.y - prevY) * k;
+    const cz = prevZ + (o.z - prevZ) * k;
+    const score = dartScore(Math.hypot(cy - DARTBOARD.y, cz - DARTBOARD.z));
+    if (score) {
+      o.x = face - OBJECT_RADIUS;
+      o.y = cy;
+      o.z = cz;
+      o.vx = -o.vx * 0.3;
+      o.vz *= 0.5;
+      o.dart = score;
+    }
+  }
 
   // móveis: topo (pouso) ou laterais (rebate)
   for (const b of COLLIDERS) {
@@ -93,6 +118,7 @@ export function stepObject(obj, dt, gravityScale = 1) {
     stepOnce(o, h, g);
     t -= h;
   }
+  delete o.dart; // quem conta os pontos é quem arremessou (advanceThrown)
   return o;
 }
 
@@ -106,15 +132,22 @@ export function advanceThrown(obj, dt, gravityScale, people, excludeId) {
   const o = { ...obj };
   const g = GRAVITY * gravityScale;
   let t = Math.min(dt, 0.25);
+  let dart = 0;
   while (t > 1e-6 && o.moving) {
     const h = Math.min(FIXED, t);
     stepOnce(o, h, g);
     t -= h;
+    if (o.dart) {
+      // um acerto no alvo por arremesso
+      if (!o.darted) dart = o.dart;
+      o.darted = true;
+      delete o.dart;
+    }
     if (o.spent) continue; // já acertou alguém neste arremesso
     const hit = hitTest(o, people, excludeId);
-    if (hit) return { obj: o, hit };
+    if (hit) return { obj: o, hit, dart };
   }
-  return { obj: o, hit: null };
+  return { obj: o, hit: null, dart };
 }
 
 /** Posição e velocidade iniciais de um arremesso a partir da mão de quem joga. */

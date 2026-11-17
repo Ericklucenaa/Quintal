@@ -13,12 +13,12 @@ import { logWarn } from '../../services/log';
 import { playAppSound } from '../../services/soundEffects';
 import { hasPermission } from '../../services/permissions';
 import {
-  SEATS, SCREEN, spawnFor, JUKEBOX, GAME_TABLES, GAME_REACH, seatIndexFor, tableById
+  SEATS, SCREEN, spawnFor, JUKEBOX, DARTBOARD, GAME_TABLES, GAME_REACH, seatIndexFor, tableById
 } from '../../services/room3d/layout';
 import { loadMyLook, saveMyLook, defaultLookFor, validateLook } from '../../services/room3d/looks';
 import { step, nearestSeat, sitAt, lerpAngle, resolve, groundAt } from '../../services/room3d/movement';
 import {
-  decode, encodeReaction, encodeState, encodeGrab, encodeThrow, encodeDrop, encodeRest, encodeHit,
+  decode, encodeReaction, encodeState, encodeGrab, encodeThrow, encodeDrop, encodeRest, encodeHit, encodeDart,
   encodeTheme, encodeSnapshot, encodeLook, encodeCollective, encodeCollectiveJoin, encodeCollectiveLeave,
   createRateLimiter, REACTIONS
 } from '../../services/room3d/protocol';
@@ -145,7 +145,7 @@ export default function Room3D({ onExpandScreen }) {
   // Valores que o laço de animação lê sem recriar a cena.
   const live = useRef({});
   const commandsRef = useRef({});
-  const sceneState = useRef({ music: null, vitrolaOn: false });
+  const sceneState = useRef({ music: null, vitrolaOn: false, darts: null });
   live.current.voiceUsers = voice.voiceUsers;
   live.current.spatialOn = spatialOn;
   live.current.view = view;
@@ -240,6 +240,18 @@ export default function Room3D({ onExpandScreen }) {
     const objMeshes = new Map();
     const reactionLimiter = createRateLimiter(4, 2000);
     const hitLimiter = createRateLimiter(4, 1000);
+    const dartLimiter = createRateLimiter(3, 1000);
+    // Placar do alvo nesta sessão (soma por pessoa) e o último acerto, desenhados no próprio alvo.
+    const dartTotals = new Map();
+    const registerDart = (userId, score) => {
+      dartTotals.set(userId, (dartTotals.get(userId) || 0) + score);
+      const name = (id) => avatars.get(id)?.user?.username || 'Alguém';
+      sceneState.current.darts = {
+        last: { name: name(userId), score },
+        top: [...dartTotals.entries()].sort((a, b) => b[1] - a[1]).slice(0, 3).map(([id, total]) => ({ name: name(id), total }))
+      };
+      soundAt(score >= 25 ? 'game-point' : 'room-hit', DARTBOARD.x, DARTBOARD.z, 0.8);
+    };
     const collectiveLimiter = createRateLimiter(3, 20000);
     let hitsTaken = 0;
     let renderError = null;
@@ -570,7 +582,7 @@ export default function Room3D({ onExpandScreen }) {
         case 'drop':
           if (!o || msg.ver < o.ver) break;
           if (o.holder === myId) setLocalHolding(null);
-          objects.set(o.id, { ...o, x: msg.x, y: msg.y, z: msg.z, vx: msg.vx, vy: msg.vy, vz: msg.vz, holder: null, moving: true, ver: msg.ver, thrower: msg.type === 'throw' ? from : null, spent: false });
+          objects.set(o.id, { ...o, x: msg.x, y: msg.y, z: msg.z, vx: msg.vx, vy: msg.vy, vz: msg.vz, holder: null, moving: true, ver: msg.ver, thrower: msg.type === 'throw' ? from : null, spent: false, darted: false });
           if (msg.type === 'throw') {
             avatars.get(from)?.avatar.playThrow();
             soundAt('room-throw', msg.x, msg.z);
@@ -578,6 +590,11 @@ export default function Room3D({ onExpandScreen }) {
           break;
         case 'rest':
           if (o && msg.ver === o.ver && !o.holder) objects.set(o.id, { ...o, x: msg.x, y: msg.y, z: msg.z, vx: 0, vy: 0, vz: 0, moving: false, thrower: null });
+          break;
+        case 'dart':
+          // só vale de quem arremessou aquele objeto
+          if (!o || o.thrower !== from || !dartLimiter(from)) break;
+          registerDart(from, msg.score);
           break;
         case 'hit': {
           // só vale se quem avisou é quem arremessou aquele objeto
@@ -757,7 +774,7 @@ export default function Room3D({ onExpandScreen }) {
       me = { ...me, yaw: aimYaw };
       const m = throwFrom(me, aimYaw);
       const ver = o.ver + 1;
-      objects.set(o.id, { ...o, ...m, holder: null, moving: true, ver, thrower: myId, spent: false });
+      objects.set(o.id, { ...o, ...m, holder: null, moving: true, ver, thrower: myId, spent: false, darted: false });
       voice.sendRoomMessage(encodeThrow(o.id, ver, m));
       setLocalHolding(null);
       avatars.get(myId)?.avatar.playThrow();
@@ -1022,6 +1039,10 @@ export default function Room3D({ onExpandScreen }) {
         if (o.thrower === myId) {
           const res = advanceThrown(o, dt, theme.gravity, people, myId);
           next = res.obj;
+          if (res.dart) {
+            voice.sendRoomMessage(encodeDart(id, res.dart));
+            registerDart(myId, res.dart);
+          }
           const target = res.hit;
           if (target) {
             const len = Math.hypot(next.vx, next.vz) || 1;
@@ -1054,7 +1075,7 @@ export default function Room3D({ onExpandScreen }) {
       gameProps.update(hub);
       hub.takeEvents().forEach((ev) => {
         const t = tableById(ev.id);
-        const sound = { move: 'game-move', capture: 'game-capture', cue: 'game-cue', point: 'game-point', over: 'game-over' }[ev.kind];
+        const sound = { move: 'game-move', capture: 'game-capture', truco: 'game-capture', cue: 'game-cue', point: 'game-point', over: 'game-over' }[ev.kind];
         if (sound && t) soundAt(sound, t.x, t.z, 0.6);
       });
 
@@ -1069,6 +1090,7 @@ export default function Room3D({ onExpandScreen }) {
       if (me.holding) nextHint = 'G ou clique para arremessar · F para soltar';
       else if (me.playing && SEATS[me.seat]?.table) nextHint = 'E para levantar da mesa';
       else if (me.seat >= 0) nextHint = 'E para levantar';
+      else if (Math.abs(me.z - DARTBOARD.z) < 2 && me.x > DARTBOARD.x - 6 && me.x < DARTBOARD.x - 0.6) nextHint = 'Alvo: pegue uma bola (F) e arremesse nele (G)';
       else if (nearJukebox()) nextHint = live.current.music?.enabled ? 'E para abrir a Vitrola' : 'Vitrola: um admin precisa adicionar o bot em Configurações › Bots';
       else if (near && !live.current.openTable) {
         const st = hub.get(near.id);
@@ -1292,6 +1314,10 @@ export default function Room3D({ onExpandScreen }) {
       chessMove: (id, from, to) => hub.chessMove(id, { from, to }),
       checkersMove: (id, path) => hub.checkersMove(id, path),
       poolShot: (id, angle, power) => hub.poolShot(id, { angle, power }),
+      reversiMove: (id, index) => hub.reversiMove(id, index),
+      connect4Move: (id, col) => hub.connect4Move(id, col),
+      trucoVariant: (id, variant) => hub.setTrucoVariant(id, variant),
+      darts: () => sceneState.current.darts,
       openTable: (id) => setOpenTable(id),
       startCollective: (kind) => commandsRef.current.startCollective(kind),
       joinCollective: () => commandsRef.current.joinCollective(),

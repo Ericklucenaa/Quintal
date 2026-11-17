@@ -5,7 +5,7 @@ import * as THREE from 'three';
 import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeometry.js';
 import { COLLIDERS, GAME_TABLES, ROOM, SCREEN, SEATS } from '../../services/room3d/layout';
 import {
-  backShelves, barCounter, boardTable, danceFloor, foosballTable, jukebox, pendantLamps, pergola, pingPongTable, poolTable
+  backShelves, barCounter, boardTable, danceFloor, dartboard, foosballTable, jukebox, pendantLamps, pergola, pingPongTable, poolTable
 } from './barScene';
 
 const mat = (color, opts = {}) => new THREE.MeshStandardMaterial({ color, roughness: 0.85, metalness: 0, ...opts });
@@ -710,10 +710,11 @@ export function buildRoom(theme, state = {}) {
   const pillars = COLLIDERS.filter((c) => c.id.startsWith('pilar-'));
   scene.add(pergola(theme, pillars));
   scene.add(jukebox(anim, state));
+  scene.add(dartboard(anim, state));
 
   // Jogos
   GAME_TABLES.forEach((t) => {
-    if (t.kind === 'chess' || t.kind === 'checkers') scene.add(boardTable(theme, t, t.kind));
+    if (['chess', 'checkers', 'reversi', 'connect4', 'truco'].includes(t.kind)) scene.add(boardTable(theme, t, t.kind));
     else if (t.kind === 'pool') scene.add(poolTable(t));
     else if (t.kind === 'foosball') scene.add(foosballTable(t));
     else if (t.kind === 'pingpong') scene.add(pingPongTable(t));

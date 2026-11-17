@@ -1,0 +1,45 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><!-- Prévia da mesa de truco em jogo (4 hubs reais ligados em memória). Servida pelo Vite em /tests/visual/truco.html?seat=0&variant=paulista&plays=3 -->
+<style>html,body{margin:0;height:100%;background:#2a2622}#root{position:relative;height:100%}</style>
+</head><body><div id="root"></div>
+<script type="module">
+import '/src/renderer/styles/index.css';
+import '/src/renderer/styles/room3d.css';
+import '/src/renderer/styles/room3d-games.css';
+import React from 'react';
+import { createRoot } from 'react-dom/client';
+import GamePanel from '/src/renderer/components/room3d/games/GamePanel.jsx';
+import { GameHub } from '/src/renderer/services/room3d/games/hub.js';
+import { decode } from '/src/renderer/services/room3d/protocol.js';
+
+const q = new URLSearchParams(location.search);
+const ids = ['ana', 'bia', 'caio', 'davi'];
+const wire = [];
+const hubs = Object.fromEntries(ids.map((id) => [id, new GameHub({ myId: id, send: (text, to) => wire.push({ from: id, to, text }) })]));
+ids.forEach((id) => hubs[id].setPresent(ids));
+const flush = () => {
+  while (wire.length) {
+    const m = wire.shift();
+    const msg = decode(m.text);
+    ids.filter((id) => id !== m.from && (!m.to || m.to === id)).forEach((id) => hubs[id].handle(m.from, msg));
+  }
+};
+if (q.get('variant') === 'mineiro') { hubs.ana.sit('truco-1', 0); flush(); hubs.ana.setTrucoVariant('truco-1', 'mineiro'); flush(); }
+ids.forEach((id, seat) => { hubs[id].sit('truco-1', seat); flush(); });
+hubs.ana.tick(0.016); flush();
+// algumas cartas jogadas (cada um joga a primeira carta quando é a vez)
+const plays = Number(q.get('plays') || 0);
+for (let i = 0; i < plays; i++) {
+  const p = hubs.ana.get('truco-1').data;
+  const who = ids[p.turn];
+  hubs[who].trucoAction('truco-1', { a: 'play', c: hubs[who].myTrucoHand('truco-1').own[0] });
+  flush();
+}
+if (q.get('truco')) { const p = hubs.ana.get('truco-1').data; hubs[ids[p.turn]].trucoAction('truco-1', { a: 'truco' }); flush(); }
+const viewer = ids[Number(q.get('seat') || 0)];
+const users = ids.map((id) => ({ userId: id, username: id[0].toUpperCase() + id.slice(1) }));
+createRoot(document.getElementById('root')).render(
+  React.createElement(GamePanel, { hub: hubs[viewer], tableId: 'truco-1', myId: viewer, users, onClose() {}, onSit() {}, onLeave() {} })
+);
+window.__done = true;
+</script></body></html>

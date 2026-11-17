@@ -6,7 +6,7 @@
 //        [sinuca]      sofás do cinema         [vitrola]
 //        [totó]           PISTA DE DANÇA        BALCÃO + banquetas
 //        [ping-pong]                            prateleiras
-//        [fogueira]   xadrez xadrez damas damas   lounge
+//        [fogueira]   xadrez damas reversi lig4   lounge   (truco entre a pista e o balcão)
 //
 // Tudo aqui é dado puro: a cena desenha a partir disso e o movimento usa os mesmos
 // números, então o que se vê é o que colide.
@@ -22,19 +22,34 @@ const WEST = -Math.PI / 2;
 export const SCREEN = { x: 0, y: 2.9, z: -12.55, width: 8, height: 4.5 };
 export const DANCE_FLOOR = { x: 0, z: -1.2, w: 8, d: 6.4 };
 export const JUKEBOX = { x: 12.6, z: -10.3, w: 1.1, d: 0.7, h: 1.7 };
+// Alvo de arremesso num poste, de frente para oeste: acerta quem joga a bola nele (pontos por faixa).
+export const DARTBOARD = { x: 11.6, z: -7.6, y: 1.55, r: 0.5, t: 0.06 };
+export const DART_RINGS = [[0.07, 50], [0.17, 25], [0.29, 10], [0.4, 5], [0.5, 1]]; // raio externo (m) e pontos
 
 // Mesas de jogo. `spots` são os lugares dos jogadores (cadeira ou em pé).
+export const BOARD_KINDS = ['chess', 'checkers', 'reversi', 'connect4'];
 export const GAME_TABLES = [
   { id: 'xadrez-1', kind: 'chess', label: 'Xadrez', x: -6, z: 8.6 },
-  { id: 'xadrez-2', kind: 'chess', label: 'Xadrez', x: -2.2, z: 8.6 },
-  { id: 'damas-1', kind: 'checkers', label: 'Damas', x: 1.6, z: 8.6 },
-  { id: 'damas-2', kind: 'checkers', label: 'Damas', x: 5.4, z: 8.6 },
+  { id: 'damas-1', kind: 'checkers', label: 'Damas', x: -2.2, z: 8.6 },
+  { id: 'reversi-1', kind: 'reversi', label: 'Reversi', x: 1.6, z: 8.6 },
+  { id: 'lig4-1', kind: 'connect4', label: 'Lig 4', x: 5.4, z: 8.6 },
+  { id: 'truco-1', kind: 'truco', label: 'Truco', x: 8.8, z: 1.8 },
   { id: 'sinuca', kind: 'pool', label: 'Sinuca', x: -11.4, z: -7, w: 2.7, d: 1.5, h: 0.86 },
   { id: 'toto', kind: 'foosball', label: 'Totó', x: -11.4, z: -1.8, w: 1.6, d: 0.86, h: 0.95 },
   { id: 'pingpong', kind: 'pingpong', label: 'Ping-pong', x: -11.4, z: 3.4, w: 2.74, d: 1.53, h: 0.76 }
 ].map((t) => {
-  if (t.kind === 'chess' || t.kind === 'checkers') {
+  if (BOARD_KINDS.includes(t.kind)) {
     return { ...t, w: 0.9, d: 0.9, h: 0.74, spots: [{ x: t.x - 0.85, z: t.z, yaw: EAST, chair: true }, { x: t.x + 0.85, z: t.z, yaw: WEST, chair: true }] };
+  }
+  if (t.kind === 'truco') {
+    // 4 cadeiras; duplas frente a frente (lugares 0 e 2 contra 1 e 3), jogando em sentido anti-horário
+    const r = 0.85;
+    return { ...t, w: 1.0, d: 1.0, h: 0.74, spots: [
+      { x: t.x - r, z: t.z, yaw: EAST, chair: true },
+      { x: t.x, z: t.z + r, yaw: FACE_SCREEN, chair: true },
+      { x: t.x + r, z: t.z, yaw: WEST, chair: true },
+      { x: t.x, z: t.z - r, yaw: 0, chair: true }
+    ] };
   }
   const gap = t.kind === 'pool' ? 2.05 : t.kind === 'foosball' ? 1.25 : 2.15;
   return { ...t, spots: [{ x: t.x - gap, z: t.z, yaw: EAST }, { x: t.x + gap, z: t.z, yaw: WEST }] };
@@ -53,6 +68,7 @@ export const COLLIDERS = [
   { id: 'balcao', x: 13.4, z: -1.5, w: 1.0, d: 10, h: 1.13 },
   { id: 'prateleira', x: 15.5, z: -1.5, w: 0.8, d: 11, h: 2.6 },
   { id: 'vitrola', ...JUKEBOX },
+  { id: 'alvo', x: DARTBOARD.x + 0.12, z: DARTBOARD.z, w: 0.12, d: 0.12, h: 2.1 },
   { id: 'fogueira', x: -11, z: 10, w: 1.7, d: 1.7, h: 3.0 },
   { id: 'sofa-lounge', x: 11, z: 10.8, w: 3.3, d: 1.0, h: 0.62 },
   { id: 'sofa-lounge-2', x: 14, z: 8.6, w: 1.0, d: 2.6, h: 0.62 },
@@ -89,8 +105,10 @@ const loungeSeats = [
   ...[8, 8.9].map((z, i) => ({ id: `lounge-lado-${i}`, x: 13.85, z, yaw: WEST - 0.3, exit: { x: 13.05, z } }))
 ];
 // Cadeiras das mesas de tabuleiro (a pessoa senta virada para a mesa).
+// Ao levantar, a pessoa sai para fora da mesa (na de truco, pelo próprio lado).
 const boardSeats = GAME_TABLES.filter((t) => t.spots[0].chair).flatMap((t) => t.spots.map((s, i) => ({
-  id: `${t.id}-${i}`, x: s.x, z: s.z, yaw: s.yaw, stool: true, table: t.id, spot: i, exit: { x: s.x, z: t.z + 0.95 }
+  id: `${t.id}-${i}`, x: s.x, z: s.z, yaw: s.yaw, stool: true, table: t.id, spot: i,
+  exit: t.kind === 'truco' ? { x: s.x + (s.x - t.x) * 0.75, z: s.z + (s.z - t.z) * 0.75 } : { x: s.x, z: t.z + 0.95 }
 })));
 
 export const SEATS = [...cinemaSeats, ...sideSeats, ...barSeats, ...fireSeats, ...loungeSeats, ...boardSeats];

@@ -5,6 +5,11 @@ import { GAME_TABLES } from '../../services/room3d/layout';
 import { pieces as chessPieces } from '../../services/room3d/games/chess';
 import { BALL_COLORS, BALL_R, TABLE as POOL } from '../../services/room3d/games/pool';
 import { FB, PP, RODS, rodMen } from '../../services/room3d/games/realtime';
+import { COLS as C4_COLS, ROWS as C4_ROWS } from '../../services/room3d/games/connect4';
+
+const SUIT_GLYPH = { o: '♦', e: '♠', c: '♥', p: '♣' };
+const CARD_W = 0.062;
+const CARD_H = 0.09;
 
 const BOARD = 0.64; // lado do tabuleiro na mesa (m)
 const CELL = BOARD / 8;
@@ -32,6 +37,9 @@ export class GameProps {
     this.white = new THREE.MeshStandardMaterial({ color: '#efe6d2', roughness: 0.4 });
     this.black = new THREE.MeshStandardMaterial({ color: '#2a211c', roughness: 0.35 });
     this.cache = new Map(); // id da mesa -> { key, group }
+    this.cardTextures = new Map(); // carta -> textura (frente) e 'back' (verso)
+    this.red = new THREE.MeshStandardMaterial({ color: '#d8452f', roughness: 0.4 });
+    this.yellow = new THREE.MeshStandardMaterial({ color: '#e9b730', roughness: 0.4 });
     this.pool = null;
     this.realtime = new Map();
     this.buildStatic();
@@ -125,8 +133,51 @@ export class GameProps {
     }
   }
 
+  cardTexture(code) {
+    const id = code || 'back';
+    if (this.cardTextures.has(id)) return this.cardTextures.get(id);
+    const c = document.createElement('canvas');
+    c.width = 128;
+    c.height = 186;
+    const g = c.getContext('2d');
+    if (!code) {
+      g.fillStyle = '#f1e6d4';
+      g.fillRect(0, 0, 128, 186);
+      g.fillStyle = '#9b3b31';
+      g.fillRect(8, 8, 112, 170);
+      g.strokeStyle = '#c0574b';
+      g.lineWidth = 3;
+      for (let i = -186; i < 186; i += 14) { g.beginPath(); g.moveTo(8, 8 + i); g.lineTo(120, 120 + i); g.stroke(); }
+    } else {
+      g.fillStyle = '#fbf7ee';
+      g.fillRect(0, 0, 128, 186);
+      g.fillStyle = code[1] === 'o' || code[1] === 'c' ? '#b4271e' : '#1e1a17';
+      g.textAlign = 'center';
+      g.font = '800 64px "Segoe UI", system-ui, sans-serif';
+      g.fillText(code[0], 64, 82);
+      g.font = '60px "Segoe UI Symbol", "Segoe UI", sans-serif';
+      g.fillText(SUIT_GLYPH[code[1]], 64, 150);
+    }
+    const tex = new THREE.CanvasTexture(c);
+    tex.colorSpace = THREE.SRGBColorSpace;
+    const mat = new THREE.MeshStandardMaterial({ map: tex, roughness: 0.6 });
+    this.cardTextures.set(id, mat);
+    return mat;
+  }
+
+  /** Carta deitada na mesa: `face` = código (ou null para o verso), girada de frente para `yaw`. */
+  card(face, x, y, z, yaw) {
+    const m = new THREE.Mesh(new THREE.PlaneGeometry(CARD_W, CARD_H), this.cardTexture(face));
+    m.rotation.set(-Math.PI / 2, 0, yaw);
+    m.position.set(x, y, z);
+    m.receiveShadow = true;
+    return m;
+  }
+
   boardPieces(table, state) {
-    const key = state.data ? `${state.v}:${table.kind === 'chess' ? state.data.fen : state.data.board}` : 'empty';
+    const key = state.data
+      ? `${state.v}:${table.kind === 'chess' ? state.data.fen : table.kind === 'truco' ? JSON.stringify([state.data.trick, state.data.last, state.data.counts, state.data.phase]) : state.data.board}`
+      : 'empty';
     const cached = this.cache.get(table.id);
     if (cached?.key === key) return;
     if (cached) {
@@ -153,6 +204,54 @@ export class GameProps {
         }
         g.add(m);
       });
+    } else if (table.kind === 'reversi') {
+      const b = state.data?.board;
+      if (b) {
+        for (let i = 0; i < 64; i++) {
+          if (b[i] === '.') continue;
+          const disc = new THREE.Mesh(new THREE.CylinderGeometry(CELL * 0.4, CELL * 0.4, 0.01, 18), b[i] === 'a' ? this.black : this.white);
+          disc.castShadow = true;
+          const [x, z] = place(i % 8, 7 - Math.floor(i / 8));
+          disc.position.set(x, 0.005, z);
+          g.add(disc);
+        }
+      }
+    } else if (table.kind === 'connect4') {
+      const b = state.data?.board;
+      if (b) {
+        const cell = 0.07;
+        for (let i = 0; i < b.length; i++) {
+          if (b[i] === '.') continue;
+          const r = Math.floor(i / C4_COLS);
+          const c = i % C4_COLS;
+          const disc = new THREE.Mesh(new THREE.CylinderGeometry(0.026, 0.026, 0.056, 20), b[i] === 'a' ? this.red : this.yellow);
+          disc.rotation.z = Math.PI / 2;
+          disc.position.set(0, 0.22 + ((C4_ROWS - 1) / 2 - r) * cell, (c - (C4_COLS - 1) / 2) * cell);
+          g.add(disc);
+        }
+      }
+    } else if (table.kind === 'truco') {
+      const d = state.data;
+      if (d) {
+        const shown = d.trick.length ? d.trick : d.phase === 'handover' ? d.last : [];
+        table.spots.forEach((spot, seat) => {
+          const dx = spot.x - table.x;
+          const dz = spot.z - table.z;
+          const len = Math.hypot(dx, dz) || 1;
+          const ux = dx / len;
+          const uz = dz / len;
+          const yaw = Math.atan2(ux, uz); // a carta "olha" para quem a jogou
+          const played = shown.find(([s]) => s === seat);
+          if (played) g.add(this.card(played[1], ux * 0.13, -0.004, uz * 0.13, yaw));
+          // mão de costas, em leque, na frente do jogador
+          const n = d.counts[seat];
+          for (let k = 0; k < n; k++) {
+            const off = (k - (n - 1) / 2) * 0.045;
+            g.add(this.card(null, ux * 0.33 - uz * off, -0.005 + k * 0.001, uz * 0.33 + ux * off, yaw));
+          }
+        });
+        if (d.vira) g.add(this.card(d.vira, 0, -0.003, 0, 0.5));
+      }
     } else {
       const b = state.data?.board;
       if (b) {
@@ -181,7 +280,7 @@ export class GameProps {
   update(hub) {
     GAME_TABLES.forEach((table) => {
       const state = hub.get(table.id);
-      if (table.kind === 'chess' || table.kind === 'checkers') {
+      if (['chess', 'checkers', 'reversi', 'connect4', 'truco'].includes(table.kind)) {
         this.boardPieces(table, state);
       } else if (table.kind === 'pool' && this.pool) {
         const balls = hub.poolBalls(table.id);
@@ -221,7 +320,8 @@ export class GameProps {
     this.group.traverse((o) => {
       o.geometry?.dispose();
     });
-    [this.white, this.black].forEach((m) => m.dispose());
+    [this.white, this.black, this.red, this.yellow].forEach((m) => m.dispose());
+    this.cardTextures.forEach((m) => { m.map?.dispose(); m.dispose(); });
     this.group.parent?.remove(this.group);
   }
 }

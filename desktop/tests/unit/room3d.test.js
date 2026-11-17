@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { COLLIDERS, PLAYER_RADIUS, ROOM, SEATS, SPAWNS, spawnFor, FACE_SCREEN } from '../../src/renderer/services/room3d/layout';
+import { COLLIDERS, PLAYER_RADIUS, ROOM, SEATS, SPAWNS, spawnFor, FACE_SCREEN, tableById } from '../../src/renderer/services/room3d/layout';
 import { inputToDirection, nearestSeat, resolve, sitAt, step, WALK_SPEED, RUN_SPEED, lerpAngle } from '../../src/renderer/services/room3d/movement';
 import { createRateLimiter, decode, encodeReaction, encodeState, MAX_MESSAGE_BYTES } from '../../src/renderer/services/room3d/protocol';
 import { spatialGain, SPATIAL } from '../../src/renderer/services/room3d/spatial';
@@ -178,7 +178,11 @@ describe('bar maior', () => {
   it('as cadeiras das mesas de jogo apontam para a mesa e liberam a saída', () => {
     SEATS.filter((s) => s.table).forEach((s) => {
       expect(insideAnyCollider(s.exit.x, s.exit.z)).toBe(false);
-      expect(Math.abs(Math.abs(s.yaw) - Math.PI / 2)).toBeLessThan(1e-9);
+      // yaw 0 = olhando para +z: a direção do assento aponta para o centro da mesa (também na de truco, com 4 lados)
+      const t = tableById(s.table);
+      const len = Math.hypot(t.x - s.x, t.z - s.z);
+      const dot = (Math.sin(s.yaw) * (t.x - s.x) + Math.cos(s.yaw) * (t.z - s.z)) / len;
+      expect(dot).toBeGreaterThan(0.999);
     });
   });
 });

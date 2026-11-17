@@ -6,7 +6,10 @@
 // são conferidos por quem recebe. A sinuca manda a tacada (todos simulam igual) e depois
 // o resultado; ping-pong e totó são simulados pelo jogador do lugar 1.
 import { tableById } from '../layout';
-import { emptyTable, encodeFrameMsg, encodeInput, encodeShot, encodeTable, initialTables } from './net';
+import { emptyTable, encodeFrameMsg, encodeInput, encodeShot, encodeTable, encodeTrucoAction, encodeTrucoHand, initialTables } from './net';
+import { initialBoard as reversiBoard, next as reversiNext, play as reversiPlay } from './reversi';
+import { initialBoard as connect4Board, play as connect4Play, status as connect4Status } from './connect4';
+import { act as trucoAct, cryptoRng, dealHand as trucoDeal, newMatch as trucoNewMatch, teamOf, visibleTo } from './truco';
 import { START_FEN, outcome as chessOutcome, play as chessPlay, turnOf as chessTurn } from './chess';
 import { applyMove, findMove, initialBoard, status as checkersStatus } from './checkers';
 import { applyRules, canPlaceCue, newPoolData, simulateShot } from './pool';
@@ -17,6 +20,7 @@ import {
 const FRAME_MS = 33;
 const INPUT_MS = 50;
 const SIM_STEP = 1 / 240;
+const TRUCO_HANDOVER_MS = 2500; // pausa para todos verem quem levou a mão antes da próxima
 
 export function freshData(kind) {
   switch (kind) {
@@ -25,7 +29,9 @@ export function freshData(kind) {
     case 'pool': return newPoolData();
     case 'pingpong': return newPingPongData();
     case 'foosball': return newFoosballData();
-    default: return null;
+    case 'reversi': return { board: reversiBoard(), turn: 0, last: null, passed: false };
+    case 'connect4': return { board: connect4Board(), turn: 0, last: null, line: null };
+    default: return null; // truco: quem dá as cartas monta o estado
   }
 }
 
@@ -33,11 +39,14 @@ export function freshData(kind) {
 export function turnIndex(t) {
   if (!t.data) return null;
   if (t.kind === 'chess') return chessTurn(t.data.fen);
-  if (t.kind === 'checkers' || t.kind === 'pool') return t.data.turn;
+  if (['checkers', 'pool', 'reversi', 'connect4', 'truco'].includes(t.kind)) return t.data.turn;
   return null;
 }
 
 const newer = (a, b) => a.v > b.v || (a.v === b.v && a.by < b.by);
+const full = (t) => t.players.every(Boolean);
+/** Quem vence quando o lugar `seat` desiste ou abandona: o adversário, ou a outra dupla no truco. */
+const otherSide = (t, seat) => (t.kind === 'truco' ? 1 - teamOf(seat) : 1 - seat);
 
 export class GameHub {
   constructor({ myId, send }) {
@@ -55,6 +64,10 @@ export class GameHub {
     // Lugar que eu pedi: se duas pessoas sentam ao mesmo tempo, uma versão perde;
     // quem perdeu senta de novo (se o lugar ainda estiver livre).
     this.wantSeat = null;
+    // Truco: o estado completo (com as mãos) só existe em quem dá as cartas (lugar 0).
+    this.truco = new Map(); // id -> { pub, hands }
+    this.trucoHands = new Map(); // id -> { hand, own, partner } (a minha mão, recebida em particular)
+    this.handoverAt = new Map();
   }
 
   subscribe(fn) {
@@ -100,11 +113,13 @@ export class GameHub {
     const was = players.indexOf(this.myId);
     if (was >= 0) players[was] = null;
     players[seat] = this.myId;
-    const full = players[0] && players[1];
-    const starting = full && t.status !== 'playing';
+    const complete = players.every(Boolean);
+    // truco: quem dá as cartas (lugar 0) começa a partida em tick(), com as mãos em particular
+    const starting = complete && t.status !== 'playing' && t.kind !== 'truco';
+    const trucoStatus = t.status === 'playing' ? 'playing' : 'waiting';
     this.commit(id, {
       players,
-      status: starting ? 'playing' : full ? t.status : 'waiting',
+      status: starting ? 'playing' : t.kind === 'truco' ? trucoStatus : complete ? t.status : 'waiting',
       winner: starting ? null : t.winner,
       reason: '',
       data: starting ? freshData(t.kind) : t.data
@@ -124,22 +139,148 @@ export class GameHub {
     this.commit(id, {
       players,
       status: abandoned ? 'over' : t.status === 'over' ? 'over' : 'waiting',
-      winner: abandoned ? 1 - i : t.winner,
+      winner: abandoned ? otherSide(t, i) : t.winner,
       reason: abandoned ? 'desistência' : t.reason
     });
   }
 
   rematch(id) {
     const t = this.tables.get(id);
-    if (!t || !t.players.includes(this.myId) || !t.players[0] || !t.players[1]) return;
-    this.commit(id, { status: 'playing', winner: null, reason: '', data: freshData(t.kind) });
+    if (!t || !t.players.includes(this.myId) || !full(t)) return;
+    // truco: volta a "esperando" e quem dá as cartas começa a próxima partida
+    if (t.kind === 'truco') this.commit(id, { status: 'waiting', winner: null, reason: '', data: null });
+    else this.commit(id, { status: 'playing', winner: null, reason: '', data: freshData(t.kind) });
   }
 
   resign(id) {
     const t = this.tables.get(id);
     const i = t?.players.indexOf(this.myId);
     if (!t || i < 0 || t.status !== 'playing') return;
-    this.commit(id, { status: 'over', winner: 1 - i, reason: 'desistência' });
+    this.commit(id, { status: 'over', winner: otherSide(t, i), reason: 'desistência' });
+  }
+
+  /** Truco: a variante só muda com a mesa parada, por quem está sentado nela. */
+  setTrucoVariant(id, variant) {
+    const t = this.tables.get(id);
+    if (!t || t.kind !== 'truco' || t.status === 'playing' || !t.players.includes(this.myId)) return false;
+    if (variant !== 'paulista' && variant !== 'mineiro') return false;
+    this.commit(id, { opts: { variant } });
+    return true;
+  }
+
+  reversiMove(id, index) {
+    const t = this.tables.get(id);
+    if (!t || t.status !== 'playing' || t.kind !== 'reversi') return false;
+    const side = t.data.turn;
+    if (t.players[side] !== this.myId) return false;
+    const board = reversiPlay(t.data.board, side, index);
+    if (!board) return false;
+    const nx = reversiNext(board, side);
+    this.commit(id, {
+      data: { board, turn: nx.turn, last: index, passed: nx.passed !== undefined },
+      status: nx.over ? 'over' : 'playing',
+      winner: nx.over ? nx.winner : null,
+      reason: nx.over ? 'sem jogadas' : nx.passed !== undefined ? 'sem jogada: passou a vez' : ''
+    });
+    this.events.push({ kind: 'move', id });
+    return true;
+  }
+
+  connect4Move(id, col) {
+    const t = this.tables.get(id);
+    if (!t || t.status !== 'playing' || t.kind !== 'connect4') return false;
+    const side = t.data.turn;
+    if (t.players[side] !== this.myId) return false;
+    const res = connect4Play(t.data.board, side, col);
+    if (!res) return false;
+    const st = connect4Status(res.board, side, res.index);
+    this.commit(id, {
+      data: { board: res.board, turn: 1 - side, last: res.index, line: st.line },
+      status: st.over ? 'over' : 'playing',
+      winner: st.over ? st.winner : null,
+      reason: st.over ? (st.winner === -1 ? 'grade cheia' : '4 em linha') : ''
+    });
+    this.events.push({ kind: 'move', id });
+    return true;
+  }
+
+  // ---------------------------------------------------------------- truco
+
+  /** Ação do jogador local: quem dá as cartas aplica direto; os outros mandam para ele. */
+  trucoAction(id, action) {
+    const t = this.tables.get(id);
+    if (!t || t.kind !== 'truco' || t.status !== 'playing' || !t.data) return false;
+    const seat = t.players.indexOf(this.myId);
+    if (seat < 0) return false;
+    if (seat === 0) return this.applyTruco(id, 0, action);
+    this.send(encodeTrucoAction(id, t.data.hand, action), t.players[0]);
+    return true;
+  }
+
+  applyTruco(id, seat, action) {
+    const t = this.tables.get(id);
+    const state = this.truco.get(id);
+    if (!t || !state || t.players[0] !== this.myId) return false;
+    const res = trucoAct(state, seat, action);
+    if (!res) return false;
+    this.truco.set(id, res.full);
+    const over = res.full.pub.phase === 'over';
+    this.commit(id, {
+      data: res.full.pub,
+      status: over ? 'over' : 'playing',
+      winner: over ? res.event.winner : null,
+      reason: over ? 'chegou a 12' : ''
+    });
+    this.sendTrucoHands(id);
+    const e = res.event;
+    this.events.push({ kind: e.kind === 'truco' ? 'truco' : e.kind === 'hand' ? 'point' : 'move', id, ...(e.kind === 'truco' ? { to: e.to } : {}) });
+    return true;
+  }
+
+  startTruco(id) {
+    const t = this.tables.get(id);
+    if (!t || t.players[0] !== this.myId || !full(t)) return;
+    const dealer = Math.floor(cryptoRng()() * 4);
+    const state = trucoNewMatch(t.opts?.variant || 'paulista', cryptoRng(), dealer);
+    this.truco.set(id, state);
+    this.handoverAt.delete(id);
+    this.commit(id, { status: 'playing', winner: null, reason: '', data: state.pub });
+    this.sendTrucoHands(id);
+    this.events.push({ kind: 'move', id });
+  }
+
+  /** Cada um recebe só a própria mão (e a do parceiro na mão de onze/dez), em particular. */
+  sendTrucoHands(id, onlyTo = null) {
+    const t = this.tables.get(id);
+    const state = this.truco.get(id);
+    if (!t || !state) return;
+    t.players.forEach((uid, seat) => {
+      if (!uid || (onlyTo && uid !== onlyTo)) return;
+      const vis = visibleTo(state, seat);
+      if (uid === this.myId) this.trucoHands.set(id, { hand: state.pub.hand, own: vis.own, partner: vis.partner });
+      else this.send(encodeTrucoHand(id, state.pub.hand, vis.own, vis.partner), uid);
+    });
+  }
+
+  /** A minha mão na mão atual (null enquanto não chega). */
+  myTrucoHand(id) {
+    const t = this.tables.get(id);
+    const h = this.trucoHands.get(id);
+    return t?.data && h && h.hand === t.data.hand ? h : null;
+  }
+
+  onTrucoAct(from, { id, hand, action }) {
+    const t = this.tables.get(id);
+    if (!t || t.players[0] !== this.myId || t.status !== 'playing' || t.data?.hand !== hand) return;
+    const seat = t.players.indexOf(from);
+    if (seat > 0) this.applyTruco(id, seat, action);
+  }
+
+  onTrucoHand(from, { id, hand, own, partner }) {
+    const t = this.tables.get(id);
+    if (!t || t.players[0] !== from || !t.players.includes(this.myId)) return;
+    this.trucoHands.set(id, { hand, own, partner });
+    this.emit();
   }
 
   chessMove(id, move) {
@@ -222,6 +363,8 @@ export class GameHub {
       case 'frame': return this.onFrame(from, msg);
       case 'input': return this.onInput(from, msg);
       case 'shot': return this.onShot(from, msg);
+      case 'truco-act': return this.onTrucoAct(from, msg);
+      case 'truco-hand': return this.onTrucoHand(from, msg);
       default:
     }
     return undefined;
@@ -232,16 +375,19 @@ export class GameHub {
     if (!cur || incoming.by !== from || !newer(incoming, cur)) return;
     // ninguém tira outra pessoa (presente) do lugar. Versões iguais são mudanças
     // simultâneas: vence o menor id e quem perdeu senta de novo (reclaimSeat).
-    for (let i = 0; i < 2 && incoming.v > cur.v; i++) {
+    for (let i = 0; i < cur.players.length && incoming.v > cur.v; i++) {
       const holder = cur.players[i];
       if (holder && holder !== incoming.players[i] && holder !== from && this.present.has(holder)) return;
     }
     const seatedBefore = cur.players.includes(from);
     const seatedNow = incoming.players.includes(from);
     if (!seatedBefore && !seatedNow) return;
+    // truco: o jogo (cartas, vez, pontos) só muda por quem dá as cartas, sem trocar ninguém de lugar
+    if (cur.kind === 'truco' && incoming.data && JSON.stringify(incoming.data) !== JSON.stringify(cur.data)
+      && (from !== incoming.players[0] || incoming.players.join() !== cur.players.join())) return;
     // lance de xadrez/damas: confere quando é o próximo da sequência
     if (incoming.v === cur.v + 1 && cur.status === 'playing' && incoming.status !== 'waiting' && cur.data && incoming.data
-      && JSON.stringify(cur.data) !== JSON.stringify(incoming.data) && cur.players[0] && cur.players[1]
+      && JSON.stringify(cur.data) !== JSON.stringify(incoming.data) && full(cur) && cur.kind !== 'truco'
       && cur.players.join() === incoming.players.join()) {
       if (!this.validTransition(cur, incoming, from)) return;
     }
@@ -272,6 +418,16 @@ export class GameHub {
       if (cur.players[cur.data.turn] !== from || !next.data.last) return false;
       const move = findMove(cur.data.board, cur.data.turn, next.data.last);
       return Boolean(move) && applyMove(cur.data.board, move) === next.data.board;
+    }
+    if (cur.kind === 'reversi') {
+      if (cur.players[cur.data.turn] !== from || next.data.last === null) return false;
+      const board = reversiPlay(cur.data.board, cur.data.turn, next.data.last);
+      return board === next.data.board && reversiNext(board, cur.data.turn).turn === next.data.turn;
+    }
+    if (cur.kind === 'connect4') {
+      if (cur.players[cur.data.turn] !== from || next.data.last === null) return false;
+      const res = connect4Play(cur.data.board, cur.data.turn, next.data.last % 7);
+      return Boolean(res) && res.board === next.data.board && res.index === next.data.last && next.data.turn === 1 - cur.data.turn;
     }
     return true; // sinuca e tempo real: quem manda é jogador da mesa (conferido acima)
   }
@@ -304,7 +460,10 @@ export class GameHub {
 
   /** Estado das mesas em uso para quem acabou de entrar na chamada. */
   snapshotTo(peerId) {
-    this.tables.forEach((t) => { if (t.v > 0) this.send(encodeTable(t), peerId); });
+    this.tables.forEach((t) => {
+      if (t.v > 0) this.send(encodeTable(t), peerId);
+      if (t.kind === 'truco' && t.players[0] === this.myId && t.players.includes(peerId)) this.sendTrucoHands(t.id, peerId);
+    });
   }
 
   /** Quem está na chamada (lugares de quem saiu ficam livres). */
@@ -327,6 +486,7 @@ export class GameHub {
   tick(dt) {
     const now = performance.now();
     let changed = false;
+    this.tickTruco(now);
     this.tables.forEach((t, id) => {
       if (t.kind !== 'pingpong' && t.kind !== 'foosball') return;
       if (t.status !== 'playing') return;
@@ -392,6 +552,28 @@ export class GameHub {
       if (l.anim && now - l.anim.start > (l.anim.frames.length / 60) * 1000 + 200) {
         this.live.delete(id);
         this.emit();
+      }
+    });
+  }
+
+  /** Quem dá as cartas começa a partida, passa para a próxima mão e se recupera se perdeu o estado. */
+  tickTruco(now) {
+    this.tables.forEach((t, id) => {
+      if (t.kind !== 'truco' || t.players[0] !== this.myId) return;
+      if (t.status === 'waiting' && full(t) && t.players.every((p) => this.present.has(p))) {
+        this.startTruco(id);
+      } else if (t.status === 'playing' && !this.truco.has(id)) {
+        this.startTruco(id); // quem dá as cartas recarregou e perdeu as mãos: recomeça a partida
+      } else if (t.status === 'playing' && t.data?.phase === 'handover') {
+        if (!this.handoverAt.has(id)) this.handoverAt.set(id, now);
+        else if (now - this.handoverAt.get(id) > TRUCO_HANDOVER_MS) {
+          this.handoverAt.delete(id);
+          const next = trucoDeal(this.truco.get(id), cryptoRng());
+          this.truco.set(id, next);
+          this.commit(id, { data: next.pub });
+          this.sendTrucoHands(id);
+          this.events.push({ kind: 'move', id });
+        }
       }
     });
   }

@@ -4,10 +4,14 @@
 import { GAME_TABLES, tableById } from '../layout';
 import { isValidFen } from './chess';
 import { isValidBoard } from './checkers';
+import { isValidBoard as isReversiBoard } from './reversi';
+import { isValidBoard as isConnect4Board, COLS as C4_COLS, ROWS as C4_ROWS } from './connect4';
+import { isCard, isValidPublic as isTrucoPublic, VARIANTS as TRUCO_VARIANTS } from './truco';
 import { isValidPoolData } from './pool';
 import { decodeFrame } from './realtime';
 
 export const STATUSES = ['waiting', 'playing', 'over'];
+export { TRUCO_VARIANTS };
 const isUser = (id) => typeof id === 'string' && id.length > 0 && id.length <= 64 && /^[\w-]+$/.test(id);
 const finite = (n) => typeof n === 'number' && Number.isFinite(n);
 const r4 = (n) => Math.round(n * 10000) / 10000;
@@ -16,7 +20,7 @@ const isSquare = (s) => typeof s === 'string' && /^[a-h][1-8]$/.test(s);
 /** Estado vazio de uma mesa. */
 export function emptyTable(id) {
   const t = tableById(id);
-  return { id, kind: t.kind, v: 0, by: '', players: [null, null], status: 'waiting', winner: null, reason: '', data: null };
+  return { id, kind: t.kind, v: 0, by: '', players: t.spots.map(() => null), status: 'waiting', winner: null, reason: '', data: null, opts: t.kind === 'truco' ? { variant: 'paulista' } : null };
 }
 
 export function initialTables() {
@@ -38,6 +42,16 @@ function packData(kind, d) {
       return { sc: d.score, sv: d.server, tg: d.target };
     case 'foosball':
       return { sc: d.score, tg: d.target };
+    case 'reversi':
+      return { b: d.board, t: d.turn, l: d.last ?? null, p: d.passed ? 1 : 0 };
+    case 'connect4':
+      return { b: d.board, t: d.turn, l: d.last ?? null, w: d.line || null };
+    case 'truco':
+      return {
+        v: d.variant === 'mineiro' ? 'm' : 'p', s: d.score, h: d.hand, d: d.dealer, u: d.turn, x: d.value, i: d.vira || '',
+        k: d.trick, l: d.last, r: d.rounds, c: d.counts, a: d.raise ? [d.raise.team, d.raise.to, d.raise.prev, d.raise.seat] : 0,
+        y: d.raisedBy, o: d.special ? d.special.team : -1, q: d.specialTeam, f: d.phase, n: (d.note || '').slice(0, 60)
+      };
     default:
       return null;
   }
@@ -72,6 +86,27 @@ function unpackData(kind, p) {
       const target = Number.isInteger(p.tg) && p.tg >= 1 && p.tg <= 21 ? p.tg : kind === 'pingpong' ? 11 : 5;
       return kind === 'pingpong' ? { score: sc, server: p.sv === 1 ? 1 : 0, target } : { score: sc, target };
     }
+    case 'reversi': {
+      if (!isReversiBoard(p.b) || (p.t !== 0 && p.t !== 1)) return undefined;
+      const last = Number.isInteger(p.l) && p.l >= 0 && p.l < 64 ? p.l : null;
+      return { board: p.b, turn: p.t, last, passed: p.p === 1 };
+    }
+    case 'connect4': {
+      if (!isConnect4Board(p.b) || (p.t !== 0 && p.t !== 1)) return undefined;
+      const n = C4_COLS * C4_ROWS;
+      const last = Number.isInteger(p.l) && p.l >= 0 && p.l < n ? p.l : null;
+      const line = Array.isArray(p.w) && p.w.length >= 4 && p.w.length <= 7 && p.w.every((i) => Number.isInteger(i) && i >= 0 && i < n) ? p.w : null;
+      return { board: p.b, turn: p.t, last, line };
+    }
+    case 'truco': {
+      const raise = Array.isArray(p.a) && p.a.length === 4 ? { team: p.a[0], to: p.a[1], prev: p.a[2], seat: p.a[3] } : null;
+      const d = {
+        variant: p.v === 'm' ? 'mineiro' : 'paulista', score: p.s, hand: p.h, dealer: p.d, turn: p.u, value: p.x,
+        vira: p.i ? p.i : null, trick: p.k, last: p.l, rounds: p.r, counts: p.c, raise, raisedBy: p.y,
+        special: Number.isInteger(p.o) && p.o >= 0 ? { team: p.o } : null, specialTeam: p.q, phase: p.f, note: typeof p.n === 'string' ? p.n.slice(0, 60) : ''
+      };
+      return isTrucoPublic(d) ? d : undefined;
+    }
     default:
       return undefined;
   }
@@ -90,9 +125,16 @@ export function encodeTable(t) {
     s: t.status,
     w: t.winner,
     x: (t.reason || '').slice(0, 60),
-    d: packData(t.kind, t.data)
+    d: packData(t.kind, t.data),
+    ...(t.kind === 'truco' ? { o: t.opts?.variant === 'mineiro' ? 'm' : 'p' } : {})
   });
 }
+/** Truco: ação de um jogador para quem dá as cartas (lugar 0). */
+export const encodeTrucoAction = (id, hand, action) => enc('gx', { g: id, h: hand, a: action.a, ...(action.c ? { c: action.c } : {}) });
+/** Truco: a mão de um jogador (e a do parceiro na mão de onze/dez), mandada só para ele. */
+export const encodeTrucoHand = (id, hand, own, partner) => enc('gh', { g: id, h: hand, o: own, ...(partner ? { q: partner } : {}) });
+const TRUCO_ACTIONS = ['play', 'truco', 'accept', 'run', 'go', 'fold'];
+const isHandList = (l) => Array.isArray(l) && l.length <= 3 && l.every(isCard);
 export const encodeFrameMsg = (id, frame) => enc('gf', { g: id, f: frame });
 export const encodeInput = (id, u, kick) => enc('gi', { g: id, u: Math.round(u * 1000) / 1000, k: kick ? 1 : 0 });
 export const encodeShot = (id, ver, shot) => enc('gp', {
@@ -110,16 +152,27 @@ export function decodeGameMessage(m) {
   switch (m.t) {
     case 'gt': {
       if (!Number.isInteger(m.r) || m.r < 0 || !isUser(m.b)) return null;
-      if (!Array.isArray(m.p) || m.p.length !== 2 || !m.p.every((x) => x === '' || isUser(x))) return null;
+      if (!Array.isArray(m.p) || m.p.length !== table.spots.length || !m.p.every((x) => x === '' || isUser(x))) return null;
       if (!STATUSES.includes(m.s)) return null;
       const winner = [0, 1, -1].includes(m.w) ? m.w : null;
       const data = unpackData(table.kind, m.d);
       if (data === undefined) return null;
       return {
         type: 'table',
-        table: { id: table.id, kind: table.kind, v: m.r, by: m.b, players: m.p.map((x) => x || null), status: m.s, winner, reason: typeof m.x === 'string' ? m.x.slice(0, 60) : '', data }
+        table: {
+          id: table.id, kind: table.kind, v: m.r, by: m.b, players: m.p.map((x) => x || null), status: m.s, winner, reason: typeof m.x === 'string' ? m.x.slice(0, 60) : '', data,
+          opts: table.kind === 'truco' ? { variant: m.o === 'm' ? 'mineiro' : 'paulista' } : null
+        }
       };
     }
+    case 'gx':
+      if (table.kind !== 'truco' || !Number.isInteger(m.h) || m.h < 0 || !TRUCO_ACTIONS.includes(m.a)) return null;
+      if (m.a === 'play' && !isCard(m.c)) return null;
+      return { type: 'truco-act', id: table.id, hand: m.h, action: { a: m.a, ...(m.a === 'play' ? { c: m.c } : {}) } };
+    case 'gh':
+      if (table.kind !== 'truco' || !Number.isInteger(m.h) || m.h < 0 || !isHandList(m.o)) return null;
+      if (m.q !== undefined && !isHandList(m.q)) return null;
+      return { type: 'truco-hand', id: table.id, hand: m.h, own: m.o, partner: m.q || null };
     case 'gf': {
       if (table.kind !== 'pingpong' && table.kind !== 'foosball') return null;
       const frame = decodeFrame(table.kind, m.f);

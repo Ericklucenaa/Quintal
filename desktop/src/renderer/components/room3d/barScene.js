@@ -2,7 +2,7 @@
 // As medidas vêm de services/room3d/layout.js, as mesmas da colisão.
 import * as THREE from 'three';
 import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeometry.js';
-import { DANCE_FLOOR, JUKEBOX } from '../../services/room3d/layout';
+import { DANCE_FLOOR, DARTBOARD, DART_RINGS, JUKEBOX } from '../../services/room3d/layout';
 
 export const mat = (color, opts = {}) => new THREE.MeshStandardMaterial({ color, roughness: 0.85, metalness: 0, ...opts });
 
@@ -326,21 +326,60 @@ export function boardTable(theme, table, kind) {
   const foot = cyl(0.3, 0.32, 0.03, mat('#2b2a33', { metalness: 0.5, roughness: 0.4 }), 20);
   foot.position.y = 0.015;
   g.add(foot);
-  // tabuleiro 8x8
-  const light = kind === 'chess' ? '#e9d8b4' : '#d9c7a0';
-  const dark = kind === 'chess' ? '#7a5534' : '#3d5a3a';
-  const boardTex = canvasTex(256, 256, (c) => {
-    for (let r = 0; r < 8; r++) for (let f = 0; f < 8; f++) {
-      c.fillStyle = (r + f) % 2 ? dark : light;
-      c.fillRect(f * 32, r * 32, 32, 32);
-    }
-  });
-  const board = new THREE.Mesh(new THREE.BoxGeometry(0.64, 0.02, 0.64), [
-    mat('#3a2a1e'), mat('#3a2a1e'), new THREE.MeshStandardMaterial({ map: boardTex, roughness: 0.45 }), mat('#3a2a1e'), mat('#3a2a1e'), mat('#3a2a1e')
-  ]);
-  board.position.y = table.h + 0.01;
-  board.receiveShadow = true;
-  g.add(board);
+  if (kind === 'chess' || kind === 'checkers' || kind === 'reversi') {
+    // tabuleiro 8x8 (reversi: feltro verde com grade)
+    const light = kind === 'chess' ? '#e9d8b4' : kind === 'checkers' ? '#d9c7a0' : '#2a7a52';
+    const dark = kind === 'chess' ? '#7a5534' : kind === 'checkers' ? '#3d5a3a' : '#2a7a52';
+    const boardTex = canvasTex(256, 256, (c) => {
+      for (let r = 0; r < 8; r++) for (let f = 0; f < 8; f++) {
+        c.fillStyle = (r + f) % 2 ? dark : light;
+        c.fillRect(f * 32, r * 32, 32, 32);
+      }
+      if (kind === 'reversi') {
+        c.strokeStyle = '#173d2a';
+        c.lineWidth = 2;
+        for (let i = 0; i <= 8; i++) {
+          c.beginPath(); c.moveTo(i * 32, 0); c.lineTo(i * 32, 256); c.stroke();
+          c.beginPath(); c.moveTo(0, i * 32); c.lineTo(256, i * 32); c.stroke();
+        }
+      }
+    });
+    const board = new THREE.Mesh(new THREE.BoxGeometry(0.64, 0.02, 0.64), [
+      mat('#3a2a1e'), mat('#3a2a1e'), new THREE.MeshStandardMaterial({ map: boardTex, roughness: 0.45 }), mat('#3a2a1e'), mat('#3a2a1e'), mat('#3a2a1e')
+    ]);
+    board.position.y = table.h + 0.01;
+    board.receiveShadow = true;
+    g.add(board);
+  } else if (kind === 'connect4') {
+    // grade do Lig 4 em pé, de frente para os dois lugares (leste e oeste): 7 colunas ao longo de z, 6 linhas
+    const holes = canvasTex(448, 384, (c) => {
+      c.fillStyle = '#2457b8';
+      c.fillRect(0, 0, 448, 384);
+      c.fillStyle = '#0d1a33';
+      for (let r = 0; r < 6; r++) for (let col = 0; col < 7; col++) {
+        c.beginPath();
+        c.arc(32 + col * 64, 32 + r * 64, 24, 0, Math.PI * 2);
+        c.fill();
+      }
+    });
+    const face = new THREE.MeshStandardMaterial({ map: holes, roughness: 0.4 });
+    const blue = mat('#1b4390', { roughness: 0.4 });
+    const frame = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.42, 0.49), [face, face, blue, blue, blue, blue]);
+    frame.position.y = table.h + 0.24;
+    frame.castShadow = true;
+    g.add(frame);
+    [-1, 1].forEach((s) => {
+      const foot = box(0.18, 0.03, 0.04, blue, 0.01);
+      foot.position.set(0, table.h + 0.015, s * 0.27);
+      g.add(foot);
+    });
+  } else if (kind === 'truco') {
+    // pano de feltro do truco
+    const felt = box(table.w - 0.12, 0.012, table.d - 0.12, mat('#246b48', { roughness: 0.95 }), 0.01);
+    felt.position.y = table.h + 0.006;
+    felt.receiveShadow = true;
+    g.add(felt);
+  }
   table.spots.forEach((s) => {
     const c = chair(theme);
     c.position.set(s.x - table.x, 0, s.z - table.z);
@@ -490,4 +529,88 @@ export function tilesTexture(base, seam) {
       c.beginPath(); c.moveTo(0, i * s); c.lineTo(w, i * s); c.stroke();
     }
   });
+}
+
+// --------------------------------------------------------------------------
+// Alvo de arremesso: disco com faixas (50, 25, 10, 5, 1) num poste, virado para oeste,
+// e um placar com o último acerto e quem mais pontuou nesta sessão.
+// --------------------------------------------------------------------------
+
+export function dartboard(anim, state) {
+  const g = new THREE.Group();
+  g.position.set(DARTBOARD.x, 0, DARTBOARD.z);
+  const metal = mat('#2b2a33', { metalness: 0.6, roughness: 0.35 });
+  const post = box(0.1, 2.1, 0.1, metal, 0.02);
+  post.position.set(0.12, 1.05, 0);
+  g.add(post);
+  const base = cyl(0.32, 0.36, 0.05, metal, 20);
+  base.position.set(0.12, 0.025, 0);
+  g.add(base);
+  const colors = ['#d8452f', '#2a7a52', '#f1e6d4', '#1e1a17', '#e9b730'];
+  const faceTex = canvasTex(512, 512, (c) => {
+    c.fillStyle = '#3a2a1e';
+    c.fillRect(0, 0, 512, 512);
+    const rings = [...DART_RINGS].reverse(); // de fora para dentro
+    rings.forEach(([r], i) => {
+      c.beginPath();
+      c.arc(256, 256, (r / DARTBOARD.r) * 250, 0, Math.PI * 2);
+      c.fillStyle = colors[(rings.length - 1 - i) % colors.length];
+      c.fill();
+    });
+    c.fillStyle = '#ffffff';
+    c.font = '700 30px "Segoe UI", system-ui, sans-serif';
+    c.textAlign = 'center';
+    rings.slice(0, -1).forEach(([r, pts], i) => {
+      const inner = rings[i + 1][0];
+      const y = 256 - (((r + inner) / 2) / DARTBOARD.r) * 250 + 11;
+      c.fillText(String(pts), 256, y);
+    });
+  });
+  const board = new THREE.Mesh(new THREE.CylinderGeometry(DARTBOARD.r, DARTBOARD.r, DARTBOARD.t, 48), mat('#3a2a1e'));
+  board.rotation.z = Math.PI / 2;
+  board.position.set(0, DARTBOARD.y, 0);
+  board.castShadow = true;
+  g.add(board);
+  const face = new THREE.Mesh(new THREE.CircleGeometry(DARTBOARD.r - 0.005, 48), new THREE.MeshStandardMaterial({ map: faceTex, roughness: 0.7 }));
+  face.rotation.y = -Math.PI / 2; // de frente para oeste (-x)
+  face.position.set(-DARTBOARD.t / 2 - 0.002, DARTBOARD.y, 0);
+  g.add(face);
+  // placar
+  const boardCanvas = document.createElement('canvas');
+  boardCanvas.width = 512;
+  boardCanvas.height = 256;
+  const scoreTex = new THREE.CanvasTexture(boardCanvas);
+  scoreTex.colorSpace = THREE.SRGBColorSpace;
+  const score = new THREE.Mesh(new THREE.PlaneGeometry(1.0, 0.5), new THREE.MeshBasicMaterial({ map: scoreTex, toneMapped: false }));
+  score.rotation.y = -Math.PI / 2;
+  score.position.set(-0.01, DARTBOARD.y + DARTBOARD.r + 0.33, 0);
+  g.add(score);
+  const draw = (darts) => {
+    const c = boardCanvas.getContext('2d');
+    c.fillStyle = '#140d08';
+    c.fillRect(0, 0, 512, 256);
+    c.textAlign = 'left';
+    c.fillStyle = '#ffcf94';
+    c.font = '700 34px "Segoe UI", system-ui, sans-serif';
+    c.fillText(darts?.last ? `${darts.last.name.slice(0, 14)}: +${darts.last.score}` : 'Alvo', 22, 52);
+    c.font = '400 26px "Segoe UI", system-ui, sans-serif';
+    c.fillStyle = 'rgba(255,207,148,0.75)';
+    if (!darts) c.fillText('pegue uma bola (F) e arremesse (G)', 22, 104);
+    (darts?.top || []).forEach((p, i) => {
+      c.fillText(`${i + 1}. ${p.name.slice(0, 16)}`, 22, 108 + i * 44);
+      c.textAlign = 'right';
+      c.fillText(String(p.total), 490, 108 + i * 44);
+      c.textAlign = 'left';
+    });
+    scoreTex.needsUpdate = true;
+  };
+  let lastKey = null;
+  anim.push(() => {
+    const key = JSON.stringify(state.darts || null);
+    if (key !== lastKey) {
+      lastKey = key;
+      draw(state.darts);
+    }
+  });
+  return g;
 }

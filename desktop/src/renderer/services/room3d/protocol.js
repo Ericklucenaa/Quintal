@@ -56,6 +56,9 @@ export const encodeThrow = (id, ver, o) => enc('t', { o: id, r: ver, ...motion(o
 export const encodeDrop = (id, ver, o) => enc('d', { o: id, r: ver, ...motion(o) });
 export const encodeRest = (id, ver, o) => enc('x', { o: id, r: ver, x: round(o.x, 1000), y: round(o.y, 1000), z: round(o.z, 1000) });
 export const encodeHit = (target, id, dx, dz) => enc('h', { u: target, o: id, dx: round(dx, 1000), dz: round(dz, 1000) });
+/** Acerto no alvo (quem arremessou avisa; os pontos só podem ser os das faixas). */
+export const encodeDart = (id, score) => enc('dt', { o: id, s: score });
+const DART_POINTS = [1, 5, 10, 25, 50];
 export const encodeTheme = (theme, ts) => enc('m', { th: theme, r: ts });
 export const encodeLook = (look) => enc('a', { l: validateLook(look) });
 export const encodeCollective = (id, kind, at) => enc('ca', { i: id, k: kind, at: Math.round(at) });
@@ -108,6 +111,8 @@ export function decode(raw) {
     case 'gf':
     case 'gi':
     case 'gp':
+    case 'gx':
+    case 'gh':
       return decodeGameMessage(m);
     case 'r':
       return REACTIONS.includes(m.e) ? { type: 'reaction', emoji: m.e } : null;
@@ -126,6 +131,8 @@ export function decode(raw) {
       const len = Math.hypot(m.dx, m.dz) || 1;
       return { type: 'hit', target: m.u, id: m.o, dx: m.dx / len, dz: m.dz / len };
     }
+    case 'dt':
+      return isObj(m.o) && DART_POINTS.includes(m.s) ? { type: 'dart', id: m.o, score: m.s } : null;
     case 'a':
       // aparência: só valores do catálogo (o que não existir vira o padrão)
       return m.l && typeof m.l === 'object' ? { type: 'look', look: validateLook(m.l) } : null;

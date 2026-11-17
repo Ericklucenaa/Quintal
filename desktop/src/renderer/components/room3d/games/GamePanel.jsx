@@ -6,13 +6,19 @@ import { movesFrom, pieces as chessPieces, outcome as chessOutcome } from '../..
 import { legalMoves as checkersMoves } from '../../../services/room3d/games/checkers';
 import { BALL_COLORS, BALL_R, MAX_POWER, POCKETS, POCKET_R, TABLE as POOL, canPlaceCue, groupOf } from '../../../services/room3d/games/pool';
 import { FB, PP, RODS, rodMen } from '../../../services/room3d/games/realtime';
+import { teamOf } from '../../../services/room3d/games/truco';
+import { Connect4Board, ReversiBoard } from './BoardGames';
+import TrucoTable from './TrucoTable';
 
 const SEAT_LABELS = {
   chess: ['Brancas', 'Pretas'],
   checkers: ['Brancas', 'Pretas'],
   pool: ['Jogador 1', 'Jogador 2'],
   pingpong: ['Vermelho', 'Preto'],
-  foosball: ['Vermelho', 'Azul']
+  foosball: ['Vermelho', 'Azul'],
+  reversi: ['Escuras', 'Claras'],
+  connect4: ['Vermelho', 'Amarelo'],
+  truco: ['Dupla A · 1', 'Dupla B · 2', 'Dupla A · 3', 'Dupla B · 4']
 };
 const GLYPHS = { w: { k: '♔', q: '♕', r: '♖', b: '♗', n: '♘', p: '♙' }, b: { k: '♚', q: '♛', r: '♜', b: '♝', n: '♞', p: '♟' } };
 
@@ -475,10 +481,18 @@ export default function GamePanel({ hub, tableId, myId, users, onClose, onSit, o
   const mySeat = state.players.indexOf(myId);
   const labels = SEAT_LABELS[table.kind];
   const turn = turnIndex(state);
-  const both = Boolean(state.players[0] && state.players[1]);
+  const both = state.players.every(Boolean);
+  const isTruco = table.kind === 'truco';
+  // truco: o vencedor é uma dupla (lugares 0 e 2 ou 1 e 3)
+  const winnerText = () => {
+    if (!isTruco) return state.winner === mySeat ? 'Você venceu' : `${nameOf(state.players[state.winner]) || labels[state.winner]} venceu`;
+    if (mySeat !== -1) return teamOf(mySeat) === state.winner ? 'Sua dupla venceu' : 'A outra dupla venceu';
+    const names = state.players.filter((_, i) => teamOf(i) === state.winner).map(nameOf).join(' e ');
+    return `${names} venceram`;
+  };
 
   let status = '';
-  if (state.status === 'waiting') status = both ? 'Prontos para começar' : 'Esperando jogadores';
+  if (state.status === 'waiting') status = both ? 'Prontos para começar' : isTruco ? `Esperando jogadores (${state.players.filter(Boolean).length}/4)` : 'Esperando jogadores';
   else if (state.status === 'playing') {
     if (turn === null) status = 'Valendo!';
     else status = turn === mySeat ? 'Sua vez' : `Vez de ${nameOf(state.players[turn])}`;
@@ -486,7 +500,7 @@ export default function GamePanel({ hub, tableId, myId, users, onClose, onSit, o
   } else if (state.status === 'over') {
     status = state.winner === -1 ? `Empate${state.reason ? ` (${state.reason})` : ''}`
       : state.winner === null ? 'Fim de jogo'
-        : `${state.winner === mySeat ? 'Você venceu' : `${nameOf(state.players[state.winner]) || labels[state.winner]} venceu`}${state.reason ? ` · ${state.reason}` : ''}`;
+        : `${winnerText()}${state.reason ? ` · ${state.reason}` : ''}`;
   }
 
   return (
@@ -499,8 +513,9 @@ export default function GamePanel({ hub, tableId, myId, users, onClose, onSit, o
         <button className="cz-icon" onClick={onClose} aria-label="Fechar painel do jogo"><X size={16} /></button>
       </header>
 
-      <div className="gp-seats">
-        {[0, 1].map((i) => {
+      {/* No truco em jogo a mesa já mostra os quatro lugares; os cartões só voltam na espera e no fim. */}
+      {!(isTruco && state.status === 'playing') && <div className="gp-seats">
+        {state.players.map((_, i) => {
           const holder = state.players[i];
           return (
             <div key={i} className={`gp-seat ${turn === i && state.status === 'playing' ? 'turn' : ''} ${holder === myId ? 'me' : ''}`}>
@@ -515,14 +530,17 @@ export default function GamePanel({ hub, tableId, myId, users, onClose, onSit, o
             </div>
           );
         })}
-      </div>
+      </div>}
 
       <div className="gp-body">
         {table.kind === 'chess' && <ChessBoard hub={hub} table={table} state={state} mySeat={mySeat} />}
         {table.kind === 'checkers' && <CheckersBoard hub={hub} table={table} state={state} mySeat={mySeat} />}
         {table.kind === 'pool' && <PoolTable hub={hub} table={table} state={state} mySeat={mySeat} />}
         {(table.kind === 'pingpong' || table.kind === 'foosball') && <RealtimeField hub={hub} table={table} state={state} mySeat={mySeat} />}
-        {state.status === 'waiting' && !both && (
+        {table.kind === 'reversi' && <ReversiBoard hub={hub} table={table} state={state} mySeat={mySeat} />}
+        {table.kind === 'connect4' && <Connect4Board hub={hub} table={table} state={state} mySeat={mySeat} />}
+        {isTruco && <TrucoTable hub={hub} table={table} state={state} mySeat={mySeat} nameOf={nameOf} myId={myId} />}
+        {state.status === 'waiting' && !both && !isTruco && (
           <div className="gp-overlay">
             {mySeat === -1 ? 'Escolha um lado acima para jogar. Quem chegar perto pode assistir.' : 'Esperando alguém sentar do outro lado…'}
           </div>
