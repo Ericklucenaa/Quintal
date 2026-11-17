@@ -254,8 +254,14 @@ app.whenReady().then(async () => {
       return true;
     `);
     await waitA(`document.querySelector('.music-now')`, 'faixa tocando na Vitrola', 20000);
-    await waitB(`[...document.querySelectorAll('.room3d-chip')].some((c) => c.classList.contains('on') && c.textContent.includes('Vitrola'))`, 'B vê a Vitrola tocando', 15000);
+    await waitB(`document.querySelector('.vitrola-chip.playing')`, 'B vê a Vitrola tocando', 15000);
     check('vitrola: a faixa entra na fila e começa a tocar para todos', true);
+    // Na sala 3D a Vitrola só abre pela vitrola física: para B ela não abre sozinha, nem pelo selo do topo.
+    await jsB(`document.querySelector('.vitrola-chip').click(); return true;`);
+    await sleep(500);
+    const bDock = await jsB(`return Boolean(document.querySelector('.music-dock:not(.is-hidden):not(.is-tucked)'))`);
+    const bChip = await jsB(`return Boolean([...document.querySelectorAll('.room3d-chip')].some((c) => c.textContent.includes('Vitrola')))`);
+    check('vitrola 3D: não abre sozinha nem pelo selo do topo (só pela vitrola física)', !bDock && !bChip, JSON.stringify({ bDock, bChip }));
     await sleep(6000);
     const dbg = await jsA(`const f = document.querySelector('.music-player iframe'); let slot = null; try { slot = f.contentDocument?.querySelector('.slot.on')?.id; } catch (e) { slot = 'cross-origin'; } return JSON.stringify({ d: window.__musicDebug, slot, src: f?.src })`);
     const parsed = JSON.parse(dbg);
@@ -263,6 +269,15 @@ app.whenReady().then(async () => {
     await sleep(5000);
     await shot(A, 'b18_vitrola');
     await shot(B, 'b19_vitrola_b');
+    // Ao se afastar da vitrola o painel fecha, e a música continua.
+    await jsA('window.__room3d.teleport(0, 4); return true;');
+    await waitA(`!document.querySelector('.music-dock:not(.is-hidden):not(.is-tucked)')`, 'painel da Vitrola fecha ao se afastar', 5000);
+    // Com o painel recolhido, o player continua tocando: a posição real do player avança.
+    const p1 = await jsA(`return window.__musicDebug?.bridge?.positionMs || 0`);
+    await sleep(4000);
+    const p2 = await jsA(`return window.__musicDebug?.bridge?.positionMs || 0`);
+    const tucked = await jsA(`return Boolean(document.querySelector('.music-dock.is-tucked'))`);
+    check('vitrola 3D: o painel fecha ao se afastar e a música continua tocando', tucked && p2 > p1 + 2000, JSON.stringify({ tucked, p1, p2 }));
   } catch (e) {
     check('execução', false, e.message.slice(0, 600));
   } finally {

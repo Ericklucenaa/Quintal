@@ -96,6 +96,7 @@
   border: 1px solid var(--border-strong); border-radius: var(--radius-lg); box-shadow: var(--shadow-lg); overflow: hidden;
 }
 .music-dock.is-hidden { visibility: hidden; pointer-events: none; width: 1px; height: 1px; right: 0; bottom: 0; border: none; box-shadow: none; }
+.music-dock.is-tucked { opacity: 0; pointer-events: none; }
 .music-head { display: flex; align-items: center; gap: 10px; padding: 10px 10px 10px 12px; border-bottom: 1px solid var(--border-color); }
 .music-bot-avatar { width: 28px; height: 28px; border-radius: 7px; }
 .music-head-text { flex: 1; min-width: 0; display: flex; flex-direction: column; line-height: 1.2; }
@@ -173,3 +174,6 @@
 /* chip da Vitrola no cabeçalho da chamada */
 .vitrola-chip { max-width: 260px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .vitrola-chip.playing { color: var(--accent-primary); border-color: var(--accent-primary); }
+/* Na sala 3D o selo só informa: a Vitrola abre pela vitrola física (E perto dela). */
+.vitrola-chip.is-info { cursor: default; }
+.vitrola-chip.is-info:hover { background: inherit; filter: none; }

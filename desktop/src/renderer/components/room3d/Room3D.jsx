@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import * as THREE from 'three';
 import {
   MicOff, Headphones, Maximize2, Box, Hand, Music, PartyPopper, HelpCircle, X, Palette, Check, Shirt, Eye, Video, Tv, Users,
-  Disc3, Wine, Waves, TrainFront, Camera, Download, Lock
+  Wine, Waves, TrainFront, Camera, Download, Lock
 } from 'lucide-react';
 import { useVoice } from '../../context/VoiceContext';
 import { useScreenShare } from '../../context/ScreenShareContext';
@@ -1058,6 +1058,11 @@ export default function Room3D({ onExpandScreen }) {
         if (sound && t) soundAt(sound, t.x, t.z, 0.6);
       });
 
+      // A Vitrola é um objeto da sala: o painel fecha quando a pessoa se afasta dela (a música continua).
+      if (live.current.music?.open && Math.hypot(me.x - JUKEBOX.x, me.z - (JUKEBOX.z + 0.6)) > JUKEBOX_REACH + 1.5) {
+        live.current.music.setOpen(false);
+      }
+
       // dica contextual
       let nextHint = '';
       const near = me.seat < 0 && !me.holding ? nearTable() : null;
@@ -1404,11 +1409,6 @@ export default function Room3D({ onExpandScreen }) {
         <button className="room3d-chip" onClick={() => commandsRef.current.lookAtTv?.()} title="Virar para a TV (T)">
           <Tv size={14} /> Olhar a TV
         </button>
-        {music?.enabled && (
-          <button className={`room3d-chip ${music.current ? 'on' : ''}`} onClick={() => music.setOpen(true)} title={music.current ? `Tocando: ${music.current.title}` : 'Abrir a Vitrola'}>
-            <Disc3 size={14} /> Vitrola
-          </button>
-        )}
         <div className="room3d-theme">
           <button
             className="room3d-chip"

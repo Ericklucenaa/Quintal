@@ -102,7 +102,10 @@ export default function MusicDock() {
   if (!music?.enabled) return null;
   const { queue, bridge, perms, actions, mutedHere } = music;
   const playingHere = Boolean(current && !mutedHere);
-  const visible = music.open || playingHere;
+  // Na sala 3D o painel só aparece aberto pela vitrola física. Fechado com música tocando ele fica
+  // "recolhido": invisível e sem receber cliques, mas na tela, porque o player do YouTube para se for escondido.
+  const tucked = Boolean(music.physicalOnly && !music.open && playingHere);
+  const visible = music.open || (playingHere && !music.physicalOnly);
 
   const sameTrack = bridge && current && bridge.ref === current.ref;
   const duration = current?.durationMs || (sameTrack ? bridge.durationMs : 0);
@@ -112,12 +115,14 @@ export default function MusicDock() {
   const run = (fn) => Promise.resolve(fn()).catch((err) => setNotice(err.message || 'Não foi possível.'));
 
   const close = () => {
-    if (playingHere) music.toggleMutedHere();
+    // Fora do 3D, fechar com música tocando para de ouvir aqui (o player precisa ficar visível para tocar).
+    // No 3D o painel só recolhe e a música continua.
+    if (playingHere && !music.physicalOnly) music.toggleMutedHere();
     music.setOpen(false);
   };
 
   return (
-    <aside className={`music-dock ${visible ? '' : 'is-hidden'} ${current?.kind || 'idle'}`} aria-label="Vitrola" aria-hidden={!visible}>
+    <aside className={`music-dock ${visible ? '' : tucked ? 'is-tucked' : 'is-hidden'} ${current?.kind || 'idle'}`} aria-label="Vitrola" aria-hidden={!visible}>
       <header className="music-head">
         <img src={VITROLA.avatar} alt="" className="music-bot-avatar" />
         <div className="music-head-text">
@@ -127,7 +132,7 @@ export default function MusicDock() {
         <button className="music-icon" onClick={() => setShowQueue((v) => !v)} aria-pressed={showQueue} title="Fila">
           <ListMusic size={16} /> <span className="music-count">{queue.length}</span>
         </button>
-        <button className="music-icon" onClick={close} title={playingHere ? 'Parar de ouvir aqui e fechar' : 'Fechar'} aria-label="Fechar a Vitrola">
+        <button className="music-icon" onClick={close} title={playingHere && !music.physicalOnly ? 'Parar de ouvir aqui e fechar' : 'Fechar'} aria-label="Fechar a Vitrola">
           <X size={16} />
         </button>
       </header>

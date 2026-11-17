@@ -160,6 +160,14 @@ export default function VoiceRoomArea({ embedded = false }) {
   }, [room3d]);
   const openUserMenu = useUserMenu();
   const music = useMusic();
+  // Na sala 3D, a Vitrola é um objeto da sala: só abre interagindo com ela (E perto da vitrola).
+  const setPhysicalOnly = music?.setPhysicalOnly;
+  const setMusicOpen = music?.setOpen;
+  useEffect(() => {
+    setPhysicalOnly?.(show3d);
+    if (show3d) setMusicOpen?.(false);
+    return () => setPhysicalOnly?.(false);
+  }, [show3d, setPhysicalOnly, setMusicOpen]);
 
   // What is on the stage (my capture or the stream I watch) is independent
   // of whether I am presenting.
@@ -239,9 +247,12 @@ export default function VoiceRoomArea({ embedded = false }) {
         </div>
         {music?.enabled && (
           <button
-            className={`quality-chip vitrola-chip ${music.current ? 'playing' : ''}`}
-            onClick={() => music.setOpen(true)}
-            title={music.current ? `Tocando: ${music.current.title}` : 'Abrir a Vitrola'}
+            className={`quality-chip vitrola-chip ${music.current ? 'playing' : ''} ${show3d ? 'is-info' : ''}`}
+            onClick={() => { if (!show3d) music.setOpen(true); }}
+            aria-disabled={show3d || undefined}
+            title={show3d
+              ? `${music.current ? `Tocando: ${music.current.title}. ` : ''}Para abrir a Vitrola, vá até ela na sala e aperte E.`
+              : music.current ? `Tocando: ${music.current.title}` : 'Abrir a Vitrola'}
           >
             <Disc3 size={13} className={music.current && !music.current.paused ? 'spin-slow' : ''} />
             {music.current ? music.current.title : 'Vitrola'}

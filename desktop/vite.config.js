@@ -14,7 +14,8 @@ const CSP = [
   // blob: o GLTFLoader decodifica as texturas embutidas nos .glb dos avatares a partir de URLs blob: criadas pelo
   // próprio app; sem isso a CSP bloqueia as texturas e o corpo dos avatares não aparece (1.4.0).
   "connect-src 'self' blob: https://*.googleapis.com https://*.firebaseio.com wss://*.firebaseio.com https://*.firebaseapp.com https://*.web.app https://tenor.googleapis.com https://www.google.com",
-  "frame-src https://*.firebaseapp.com https://accounts.google.com https://www.google.com",
+  // 'self' e o Hosting: o player da Vitrola (music-player.html) roda num iframe; sem isso ficava em branco (1.4.x).
+  "frame-src 'self' https://concord-3af70.web.app https://*.firebaseapp.com https://accounts.google.com https://www.google.com",
   "worker-src 'self' blob:",
   "object-src 'none'",
   "base-uri 'self'",

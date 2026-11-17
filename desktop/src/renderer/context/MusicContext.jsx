@@ -18,6 +18,7 @@ export const PLAYER_ORIGIN = typeof window !== 'undefined' && window.location.pr
 export const PLAYER_URL = `${PLAYER_ORIGIN}/music-player.html`;
 
 const VOLUME_KEY = 'concord_music_volume';
+const SILENT_SKIP_MS = 20000;
 const MUTED_KEY = 'concord_music_muted_here';
 
 export function MusicProvider({ children }) {
@@ -72,8 +73,12 @@ export function MusicProvider({ children }) {
   }, [enabled]);
 
   const current = session?.current || null;
+  // Na sala 3D a Vitrola só abre pela vitrola física: nada de abrir sozinha quando começa uma faixa.
+  const [physicalOnly, setPhysicalOnly] = useState(false);
+  const physicalOnlyRef = useRef(false);
+  physicalOnlyRef.current = physicalOnly;
   useEffect(() => {
-    if (current) setOpen(true);
+    if (current && !physicalOnlyRef.current) setOpen(true);
   }, [current?.queueId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // --- ponte com o player ---
@@ -151,12 +156,16 @@ export function MusicProvider({ children }) {
       const sameTrack = bridge && bridge.ref === current.ref && now - bridge.at < 5000;
       const ended = sameTrack && current.kind === 'youtube' && bridge.ended && expectedPosition(current, now) > 3000;
       const broken = bridge?.errorRef === current.ref && now - bridge.at < 8000 && now - current.startedAt > 3000;
-      if (ended || broken || isTrackOver(current, now)) advance(ended ? 'fim' : broken ? 'erro' : 'tempo');
+      // Player carregado aqui, mas a faixa nunca começou (vídeo sem permissão de incorporar, bloqueado, removido):
+      // sem isto a faixa ficava "tocando" para sempre, com o tempo andando e nada saindo.
+      const heard = bridge && bridge.ref === current.ref && (bridge.playing || bridge.positionMs > 1000);
+      const silent = bridgeReady && !mutedHere && !current.paused && now - current.startedAt > SILENT_SKIP_MS && !heard;
+      if (ended || broken || silent || isTrackOver(current, now)) advance(ended ? 'fim' : broken ? 'erro' : silent ? 'sem som' : 'tempo');
     };
     check();
     const t = setInterval(check, 1500);
     return () => clearInterval(t);
-  }, [enabled, amDriver, current, queue.length, bridge, advance]);
+  }, [enabled, amDriver, current, queue.length, bridge, bridgeReady, mutedHere, advance]);
 
   // O anfitrião completa título e duração que só o player sabe.
   useEffect(() => {
@@ -248,6 +257,8 @@ export function MusicProvider({ children }) {
     canSkipCurrent,
     open,
     setOpen,
+    physicalOnly,
+    setPhysicalOnly,
     volume,
     setVolume,
     mutedHere,
@@ -257,7 +268,7 @@ export function MusicProvider({ children }) {
     setError,
     frameRef,
     actions
-  }), [enabled, serverId, channelId, session, current, queue, bridge, perms, canSkipCurrent, open, volume, setVolume, mutedHere, toggleMutedHere, error, actions]);
+  }), [enabled, serverId, channelId, session, current, queue, bridge, perms, canSkipCurrent, open, physicalOnly, volume, setVolume, mutedHere, toggleMutedHere, error, actions]);
 
   return <MusicContext.Provider value={value}>{children}</MusicContext.Provider>;
 }
