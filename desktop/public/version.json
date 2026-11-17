@@ -1,10 +1,10 @@
 {
-  "version": "1.4.0",
-  "name": "Quintal v1.4.0",
-  "releaseDate": "2026-11-13",
-  "downloadUrl": "https://github.com/Ericklucenaa/Quintal/releases/download/v1.4.0/Quintal-Setup-1.4.0.exe",
-  "sha256": "e18de8def5c1e791e5daa313a12b382b5555f46e52adbac4acf5c90ef704a621",
+  "version": "1.4.1",
+  "name": "Quintal v1.4.1",
+  "releaseDate": "2026-11-17",
+  "downloadUrl": "https://github.com/Ericklucenaa/Quintal/releases/download/v1.4.1/Quintal-Setup-1.4.1.exe",
+  "sha256": "109fb2b8986ef7d315d17676c9533b2196d2b4ec246b01d3aa18f307c137cf56",
   "webUrl": "https://concord-3af70.web.app",
-  "releaseNotes": "Quintal 1.4: bots no servidor (Vitrola para ouvir YouTube e Spotify juntos na chamada, Porteiro, Guarda e Sorte), permissões por cargo, a sala 3D virou o Bar do Quintal com xadrez, damas, sinuca, pingue-pongue e pebolim, ações coletivas e avatares novos com muito mais opções de visual.",
+  "releaseNotes": "Quintal 1.4.1: corrige a Sala 3D, onde o corpo dos personagens não aparecia (só o nome) no app instalado e na versão web.",
   "isMandatory": true
 }
