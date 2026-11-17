@@ -92,6 +92,8 @@ function grayscaleTexture(tex, boost = 1.6) {
 }
 
 function averageColor(tex) {
+  // Textura que não carregou (ex.: bloqueada pela CSP): o corpo continua aparecendo, só sem a correção de tom.
+  if (!tex?.image) return null;
   const c = document.createElement('canvas');
   c.width = 32;
   c.height = 32;
@@ -129,8 +131,8 @@ export function loadAvatarAssets() {
             info.materials.skinAvg = averageColor(o.material.map);
             info.materials.skinMap = o.material.map;
           }
-          if (o.name.startsWith('hair_') && !info.materials.hairMap && o.material.map) info.materials.hairMap = grayscaleTexture(o.material.map, 1.9);
-          if (o.name === 'Eyes' && !info.materials.eyeMap && o.material.map) info.materials.eyeMap = o.material.map;
+          if (o.name.startsWith('hair_') && !info.materials.hairMap && o.material.map?.image) info.materials.hairMap = grayscaleTexture(o.material.map, 1.9);
+          if (o.name === 'Eyes' && !info.materials.eyeMap && o.material.map?.image) info.materials.eyeMap = o.material.map;
         });
         return info;
       };
@@ -584,8 +586,8 @@ export class Avatar {
     const skinTarget = new THREE.Color(SKIN_TONES[look.skin]);
     const avg = src.materials.skinAvg;
     const skinMat = own(new THREE.MeshStandardMaterial({
-      map: src.materials.skinMap,
-      color: new THREE.Color(skinTarget.r / avg.r, skinTarget.g / avg.g, skinTarget.b / avg.b),
+      map: avg ? src.materials.skinMap : null,
+      color: avg ? new THREE.Color(skinTarget.r / avg.r, skinTarget.g / avg.g, skinTarget.b / avg.b) : skinTarget,
       roughness: 0.6
     }));
     const eyeMat = own(new THREE.MeshStandardMaterial({ map: src.materials.eyeMap, color: new THREE.Color(EYE_COLORS[look.eyes]).lerp(new THREE.Color('#ffffff'), 0.35).multiplyScalar(1.6), roughness: 0.2 }));
